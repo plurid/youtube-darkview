@@ -4,6 +4,12 @@ const CANVAS_ID = 'yt-darkview-canvas';
 let toggled = false;
 let interval: NodeJS.Timeout | undefined;
 
+
+const blockSize = 20;
+const threshold = 0.6;
+const limit = 255;
+
+
 const toggleDarkview = async () => {
     const canvas = document.getElementById(CANVAS_ID);
     if (canvas) {
@@ -28,7 +34,8 @@ const toggleDarkview = async () => {
         canvas.style.top = '56px';
         canvas.style.left = '0';
         canvas.style.right = '0';
-        canvas.style.width = '100%';
+        canvas.style.margin = '0 auto';
+        canvas.style.width = videoDimensions.width + 'px';
         canvas.style.height = videoDimensions.height + 'px';
         canvas.style.zIndex = '58';
         canvas.style.pointerEvents = 'none';
@@ -55,17 +62,61 @@ const toggleDarkview = async () => {
             interval = setInterval(function() {
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                // const imageData = ctx.getImageData(0, 0, 600, 500);
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const data = imageData.data;
-                for (let i = 0; i < data.length; i += 4) {
-                    data[i] = 255 - data[i]; // Red
-                    data[i + 1] = 255 - data[i + 1]; // Green
-                    data[i + 2] = 255 - data[i + 2]; // Blue
-                }
-                ctx.putImageData(imageData, 0, 0);
 
-                // ctx.clearRect(0, canvas.height - 60, canvas.width, 50);
+                const blocksWide = Math.ceil(canvas.width / blockSize);
+                const blocksHigh = Math.ceil(canvas.height / blockSize);
+                const whiteThreshold = 255 * threshold;
+                const whiteBlocks = [];
+
+                for (let y = 0; y < blocksHigh; y++) {
+                    for (let x = 0; x < blocksWide; x++) {
+                        let whitePixelCount = 0;
+                        const startX = x * blockSize;
+                        const endX = Math.min(startX + blockSize, canvas.width);
+                        const startY = y * blockSize;
+                        const endY = Math.min(startY + blockSize, canvas.height);
+
+                        for (let blockY = startY; blockY < endY; blockY++) {
+                            for (let blockX = startX; blockX < endX; blockX++) {
+                                const dataIndex = (blockY * canvas.width + blockX) * 4;
+                                const r = data[dataIndex];
+                                const g = data[dataIndex + 1];
+                                const b = data[dataIndex + 2];
+                                // Check if pixel is white
+                                if (r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold) {
+                                    whitePixelCount++;
+                                }
+                            }
+                        }
+
+                        const whitePixelPercentage = whitePixelCount / (blockSize * blockSize);
+
+                        if (whitePixelPercentage >= threshold) {
+                            whiteBlocks.push({ x, y, whitePixelPercentage });
+                        }
+                    }
+                }
+
+                for (const block of whiteBlocks) {
+                    const startX = block.x * blockSize;
+                    const endX = Math.min(startX + blockSize, canvas.width);
+                    const startY = block.y * blockSize;
+                    const endY = Math.min(startY + blockSize, canvas.height);
+
+                    for (let blockY = startY; blockY < endY; blockY++) {
+                        for (let blockX = startX; blockX < endX; blockX++) {
+                            const dataIndex = (blockY * canvas.width + blockX) * 4;
+                            // Invert colors
+                            data[dataIndex] = 255 - data[dataIndex]; // Red
+                            data[dataIndex + 1] = 255 - data[dataIndex + 1]; // Green
+                            data[dataIndex + 2] = 255 - data[dataIndex + 2]; // Blue
+                        }
+                    }
+                }
+
+                ctx.putImageData(imageData, 0, 0);
             }, FPS_TIMEOUT);
         }, 200);
     }

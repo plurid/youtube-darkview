@@ -114,6 +114,11 @@ const Popup: React.FC<PopupProperties> = (
                 press alt/option (⌥) + D on a YouTube page to activate darkview
             </div>
 
+            {/* type - full / detect */}
+            {/* block size - 30 x 30 px */}
+            {/* threshold - 70% */}
+            {/* limit - #ffffff */}
+
             <div>
                 <LinkButton
                     text="reset"

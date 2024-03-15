@@ -1,6 +1,10 @@
 // #region imports
     // #region libraries
     import styled from 'styled-components';
+
+    import {
+        dewiki,
+    } from '@plurid/plurid-themes';
     // #endregion libraries
 // #endregion imports
 
@@ -31,4 +35,25 @@ export const StyledPopup = styled.div`
 export const inputStyle = {
     width: '250px',
 };
+
+
+export const typeButtonStyle = (
+    active: boolean,
+    location: 'left' | 'right',
+) => ({
+    width: '100%',
+    minWidth: '120px',
+    height: '40px',
+    marginTop: '1rem',
+    marginBottom: '1rem',
+    cursor: active ? 'default' : 'pointer',
+    backgroundColor: active ? dewiki.backgroundColorPrimary : dewiki.backgroundColorTertiary,
+    boxShadow: dewiki.boxShadowPenumbra,
+    color: 'white',
+    border: 'none',
+    borderTopLeftRadius: location === 'left' ? '30px' : '0px',
+    borderBottomLeftRadius: location === 'left' ? '30px' : '0px',
+    borderTopRightRadius: location === 'right' ? '30px' : '0px',
+    borderBottomRightRadius: location === 'right' ? '30px' : '0px',
+});
 // #endregion module

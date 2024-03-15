@@ -13,7 +13,7 @@
 
     import {
         InputSwitch,
-        InputLine,
+        Slider,
         LinkButton,
     } from '@plurid/plurid-ui-components-react';
     // #endregion libraries
@@ -35,6 +35,7 @@
     import {
         StyledPopup,
         inputStyle,
+        typeButtonStyle
     } from './styled';
     // #endregion internal
 // #region imports
@@ -67,28 +68,32 @@ const Popup: React.FC<PopupProperties> = (
     const [
         type,
         setType,
-    ] = useState<Options['type']>('content-aware');
+    ] = useState<Options['type']>(defaultOptions.type);
 
     const [
         threshold,
         setThreshold,
-    ] = useState(0.6);
+    ] = useState(defaultOptions.threshold);
 
     const [
         level,
         setLevel,
-    ] = useState(0.6);
+    ] = useState(defaultOptions.level);
 
     const [
         blockSize,
         setBlockSize,
-    ] = useState(20);
+    ] = useState(defaultOptions.blockSize);
     // #endregion state
 
 
     // #region handlers
     const reset = () => {
         setActivated(false);
+        setType(defaultOptions.type);
+        setThreshold(defaultOptions.threshold);
+        setLevel(defaultOptions.level);
+        setBlockSize(defaultOptions.blockSize);
     }
     // #endregion handlers
 
@@ -203,10 +208,82 @@ const Popup: React.FC<PopupProperties> = (
                 }}
             />
 
-            {/* type - full / content-aware */}
-            {/* threshold - 70% */}
-            {/* level - 70% */}
-            {/* block size - 30 x 30 px */}
+            <div
+                style={{
+                    display: 'flex',
+                }}
+            >
+                <button
+                    onClick={() => setType('invert')}
+                    style={typeButtonStyle(
+                        type === 'invert',
+                        'left',
+                    )}
+                >
+                    invert
+                </button>
+                <button
+                    onClick={() => setType('content-aware')}
+                    style={typeButtonStyle(
+                        type === 'content-aware',
+                        'right',
+                    )}
+                >
+                    content-aware
+                </button>
+            </div>
+
+            <div
+                style={{
+                    display: 'flex',
+                    gap: '2rem',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                }}
+            >
+                <div>
+                    threshold
+                </div>
+
+                <Slider
+                    name="threshold"
+                    value={threshold}
+                    atChange={(value) => {
+                        setThreshold(value);
+                    }}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    width={150}
+                    theme={dewiki}
+                />
+            </div>
+
+            <div
+                style={{
+                    display: 'flex',
+                    gap: '2rem',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                }}
+            >
+                <div>
+                    level
+                </div>
+
+                <Slider
+                    name="level"
+                    value={level}
+                    atChange={(value) => {
+                        setLevel(value);
+                    }}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    width={150}
+                    theme={dewiki}
+                />
+            </div>
 
             <div>
                 <LinkButton

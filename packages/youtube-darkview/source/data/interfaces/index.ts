@@ -1,7 +1,7 @@
 // #region exports
 export interface Options {
     activated: boolean;
-    type: 'full' | 'content-aware';
+    type: 'invert' | 'content-aware';
     threshold: number;
     level: number;
     blockSize: number;

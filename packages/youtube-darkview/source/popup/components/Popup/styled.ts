@@ -47,7 +47,7 @@ export const typeButtonStyle = (
     marginTop: '1rem',
     marginBottom: '1rem',
     cursor: active ? 'default' : 'pointer',
-    backgroundColor: active ? dewiki.backgroundColorPrimary : dewiki.backgroundColorTertiary,
+    backgroundColor: active ? dewiki.backgroundColorTertiary : dewiki.backgroundColorQuaternary,
     boxShadow: dewiki.boxShadowPenumbra,
     color: 'white',
     border: 'none',

@@ -256,6 +256,7 @@ const Popup: React.FC<PopupProperties> = (
                     step={0.1}
                     width={150}
                     theme={dewiki}
+                    level={2}
                 />
             </div>
 
@@ -282,6 +283,7 @@ const Popup: React.FC<PopupProperties> = (
                     step={0.1}
                     width={150}
                     theme={dewiki}
+                    level={2}
                 />
             </div>
 

@@ -5,6 +5,36 @@ import {
 
 
 
+function calculateEntropy(
+    ctx: CanvasRenderingContext2D,
+    x: number, y: number, width: number, height: number,
+): number {
+    const imageData = ctx.getImageData(x, y, width, height);
+    const data = imageData.data;
+
+    const histogram: number[] = new Array(256).fill(0);
+    let totalPixels = 0;
+
+    // Compute histogram
+    for (let i = 0; i < data.length; i += 4) {
+        const intensity = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
+        histogram[intensity]++;
+        totalPixels++;
+    }
+
+    // Compute probability distribution and entropy
+    let entropy = 0;
+    for (let i = 0; i < histogram.length; i++) {
+        const probability = histogram[i] / totalPixels;
+        if (probability > 0) {
+            entropy -= probability * Math.log2(probability);
+        }
+    }
+
+    return entropy;
+}
+
+
 export const getCanvasData = (
     canvas: HTMLCanvasElement,
     video: HTMLVideoElement,
@@ -70,8 +100,12 @@ export const computeDarkviewRaw = (
             }
 
             const whitePixelPercentage = whitePixelCount / (blockSize * blockSize);
+            // const entropy = calculateEntropy(ctx, startX, startY, blockSize, blockSize);
 
-            if (whitePixelPercentage >= threshold) {
+            if (
+                whitePixelPercentage >= threshold
+                // && entropy < 1
+            ) {
                 whiteBlocks.push({ x, y, whitePixelPercentage });
             } else {
                 staticBlocks.push({ x, y, whitePixelPercentage });

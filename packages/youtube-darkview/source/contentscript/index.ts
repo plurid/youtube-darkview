@@ -1,4 +1,5 @@
 // #region module
+const VIDEO_DIV_ID = 'html5-video-container';
 const CANVAS_ID = 'yt-darkview-canvas';
 
 let toggled = false;
@@ -162,7 +163,7 @@ const toggleDarkview = async () => {
         const canvas = document.createElement('canvas');
         canvas.id = CANVAS_ID;
         canvas.style.position = 'absolute';
-        canvas.style.top = '56px';
+        canvas.style.top = '0';
         canvas.style.left = '0';
         canvas.style.right = '0';
         canvas.style.margin = '0 auto';
@@ -171,7 +172,11 @@ const toggleDarkview = async () => {
         canvas.style.zIndex = '58';
         canvas.style.pointerEvents = 'none';
 
-        document.body.appendChild(canvas);
+        const container = document.getElementsByClassName(VIDEO_DIV_ID)[0];
+        if (!container) {
+            return;
+        }
+        container.appendChild(canvas);
 
         setTimeout(() => {
             const videoContentWidth = videoDimensions.width;
@@ -199,7 +204,6 @@ const toggleDarkview = async () => {
 
 const main = async () => {
     try {
-        console.log('darkview');
         document.addEventListener('keydown', (event) => {
             try {
                 if (event.altKey && event.code === 'KeyD') {

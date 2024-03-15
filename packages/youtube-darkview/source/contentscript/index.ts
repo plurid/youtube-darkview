@@ -1,18 +1,27 @@
+// #region imports
+import {
+    debounce,
+} from '../logic/utilities';
+// #endregion imports
+
+
+
 // #region module
-const VIDEO_DIV_ID = 'html5-video-container';
+const VIDEO_CONTAINER = 'html5-video-container';
 const CANVAS_ID = 'yt-darkview-canvas';
+
+// 30 frames per second (1000 ms / 30 frames ≈ 33 ms per frame)
+const FPS_TIMEOUT = 33;
+
+const blockSize = 20;
+const threshold = 0.6;
 
 let toggled = false;
 let interval: NodeJS.Timeout | undefined;
 
 
-const blockSize = 20;
-const threshold = 0.6;
-const limit = 255;
 
-
-
-const getComputes = (
+const getCanvasData = (
     canvas: HTMLCanvasElement,
     video: HTMLVideoElement,
 ) => {
@@ -44,7 +53,7 @@ const computeDarkviewRaw = (
         imageData,
         data,
         whiteThreshold,
-    } = getComputes(canvas, video);
+    } = getCanvasData(canvas, video);
 
     // const start = Date.now();
 
@@ -125,7 +134,7 @@ const computeDarkviewQuadTree = (
         imageData,
         data,
         whiteThreshold,
-    } = getComputes(canvas, video);
+    } = getCanvasData(canvas, video);
 
     // const quadtree = new QuadTreeNode(0, 0, canvas.width);
     // quadtree.update(imageData, whiteThreshold);
@@ -141,18 +150,16 @@ const computeDarkview = (
     // computeDarkviewQuadTree(canvas, video);
 }
 
-const drawDarkview = () => {
-    const video = document.getElementsByTagName('video')[0];
-    if (!video) {
-        return;
-    }
-
+const styleCanvas = (
+    canvas: HTMLCanvasElement,
+    video: HTMLVideoElement,
+) => {
     const videoDimensions = video.getBoundingClientRect();
+    const videoTop = window.getComputedStyle(video).top;
 
-    const canvas = document.createElement('canvas');
     canvas.id = CANVAS_ID;
     canvas.style.position = 'absolute';
-    canvas.style.top = '0';
+    canvas.style.top = videoTop || '0';
     canvas.style.left = '0';
     canvas.style.right = '0';
     canvas.style.margin = '0 auto';
@@ -160,8 +167,19 @@ const drawDarkview = () => {
     canvas.style.height = videoDimensions.height + 'px';
     canvas.style.zIndex = '58';
     canvas.style.pointerEvents = 'none';
+}
 
-    const container = document.getElementsByClassName(VIDEO_DIV_ID)[0];
+const drawDarkview = () => {
+    const video = document.getElementsByTagName('video')[0];
+    if (!video) {
+        return;
+    }
+    const videoDimensions = video.getBoundingClientRect();
+
+    const canvas = document.createElement('canvas');
+    styleCanvas(canvas, video);
+
+    const container = document.getElementsByClassName(VIDEO_CONTAINER)[0];
     if (!container) {
         return;
     }
@@ -177,9 +195,6 @@ const drawDarkview = () => {
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
 
-        // 30 frames per second (1000 ms / 30 frames ≈ 33 ms per frame)
-        const FPS_TIMEOUT = 33;
-
         interval = setInterval(() => {
             computeDarkview(canvas, video);
         }, FPS_TIMEOUT);
@@ -191,9 +206,9 @@ const cleanupDarkview = () => {
         clearInterval(interval);
     }
 
-    const previousCanvas = document.getElementById(CANVAS_ID);
-    if (previousCanvas) {
-        previousCanvas.remove();
+    const existingCanvas = document.getElementById(CANVAS_ID);
+    if (existingCanvas) {
+        existingCanvas.remove();
     }
 }
 
@@ -222,15 +237,19 @@ const main = async () => {
             }
         });
 
-        window.addEventListener('resize', () => {
+        const debouncedResize = debounce(() => {
             try {
                 if (toggled) {
-                    cleanupDarkview();
-                    toggleDarkview();
+                    drawDarkview();
                 }
             } catch (error) {
                 return;
             }
+        });
+
+        window.addEventListener('resize', () => {
+            cleanupDarkview();
+            debouncedResize();
         });
     } catch (error) {
         return;

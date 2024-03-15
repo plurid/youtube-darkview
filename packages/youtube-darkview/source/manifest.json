@@ -2,7 +2,7 @@
     "manifest_version" : 3,
     "name" : "YouTube Darkview",
     "short_name" : "YouTube Darkview",
-    "description" : "invert YouTube video background",
+    "description" : "invert YouTube video light backgrounds, content-aware dark viewing mode",
     "version" : "1.0.0",
     "author": "plurid",
 

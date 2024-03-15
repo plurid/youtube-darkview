@@ -20,7 +20,7 @@
 
 
 <h3>
-    invert YouTube video background
+    invert YouTube video light backgrounds, content-aware dark viewing mode
 </h3>
 
 
@@ -32,7 +32,7 @@
 
 ## About
 
-`YouTube Darkview` lets the user invert the colors of the background of the video while being aware of non-uniform content.
+`YouTube Darkview` lets the user invert the colors of the light backgrounds of the video while being aware of non-uniform content.
 
 <p align="center">
     <img src="https://raw.githubusercontent.com/plurid/youtube-darkview/master/about/images/ss-1.png" height="500px">

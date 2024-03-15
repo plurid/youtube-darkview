@@ -76,7 +76,8 @@ export const computeDarkviewRaw = (
     const blocksWide = Math.ceil(canvas.width / blockSize);
     const blocksHigh = Math.ceil(canvas.height / blockSize);
     const whiteBlocks = [];
-    const staticBlocks = [];
+    // const whiteBlocksMap: Record<string, boolean> = {};
+    // const staticBlocks = [];
 
     for (let y = 0; y < blocksHigh; y++) {
         for (let x = 0; x < blocksWide; x++) {
@@ -106,12 +107,39 @@ export const computeDarkviewRaw = (
                 whitePixelPercentage >= threshold
                 // && entropy < 1
             ) {
+                // whiteBlocksMap[`${x},${y}`] = true;
                 whiteBlocks.push({ x, y, whitePixelPercentage });
             } else {
-                staticBlocks.push({ x, y, whitePixelPercentage });
+                // staticBlocks.push({ x, y, whitePixelPercentage });
             }
         }
     }
+
+    // for (const staticBlock of staticBlocks) {
+    //     const { x, y } = staticBlock;
+    //     const keys = [
+    //         `${x - 1},${y - 1}`,
+    //         `${x},${y - 1}`,
+    //         `${x + 1},${y - 1}`,
+    //         `${x - 1},${y}`,
+    //         `${x + 1},${y}`,
+    //         `${x - 1},${y + 1}`,
+    //         `${x},${y + 1}`,
+    //         `${x + 1},${y + 1}`,
+    //     ];
+
+    //     let whitePixelCount = 0;
+    //     for (const key of keys) {
+    //         if (whiteBlocksMap[key]) {
+    //             whitePixelCount++;
+    //         }
+    //     }
+
+    //     if (whitePixelCount >= 4) {
+    //         whiteBlocksMap[`${x},${y}`] = true;
+    //         whiteBlocks.push({ x, y, whitePixelCount });
+    //     }
+    // }
 
     for (const block of whiteBlocks) {
         const startX = block.x * blockSize;

@@ -12,6 +12,8 @@
     } from '@plurid/plurid-themes';
 
     import {
+        InputSwitch,
+        InputLine,
         LinkButton,
     } from '@plurid/plurid-ui-components-react';
     // #endregion libraries
@@ -20,6 +22,7 @@
     // #region internal
     import {
         StyledPopup,
+        inputStyle,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -42,6 +45,11 @@ const Popup: React.FC<PopupProperties> = (
     const [
         loading,
         setLoading,
+    ] = useState(true);
+
+    const [
+        activate,
+        setActivate,
     ] = useState(true);
     // #endregion state
 
@@ -114,9 +122,22 @@ const Popup: React.FC<PopupProperties> = (
                 press alt/option (⌥) + D on a YouTube page to activate darkview
             </div>
 
-            {/* type - full / detect */}
-            {/* block size - 30 x 30 px */}
+            <InputSwitch
+                name="activate [⌥ + D]"
+                checked={activate}
+                atChange={() => {
+                    setActivate(value => !value);
+                }}
+                theme={dewiki}
+                style={{
+                    ...inputStyle,
+                }}
+            />
+
+            {/* type - full / content-aware */}
             {/* threshold - 70% */}
+            {/* level - 70% */}
+            {/* block size - 30 x 30 px */}
             {/* limit - #ffffff */}
 
             <div>

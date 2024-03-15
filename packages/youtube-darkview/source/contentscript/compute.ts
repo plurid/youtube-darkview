@@ -5,36 +5,6 @@ import {
 
 
 
-function calculateEntropy(
-    ctx: CanvasRenderingContext2D,
-    x: number, y: number, width: number, height: number,
-): number {
-    const imageData = ctx.getImageData(x, y, width, height);
-    const data = imageData.data;
-
-    const histogram: number[] = new Array(256).fill(0);
-    let totalPixels = 0;
-
-    // Compute histogram
-    for (let i = 0; i < data.length; i += 4) {
-        const intensity = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
-        histogram[intensity]++;
-        totalPixels++;
-    }
-
-    // Compute probability distribution and entropy
-    let entropy = 0;
-    for (let i = 0; i < histogram.length; i++) {
-        const probability = histogram[i] / totalPixels;
-        if (probability > 0) {
-            entropy -= probability * Math.log2(probability);
-        }
-    }
-
-    return entropy;
-}
-
-
 export const getCanvasData = (
     canvas: HTMLCanvasElement,
     video: HTMLVideoElement,
@@ -69,15 +39,11 @@ export const computeDarkviewRaw = (
         whiteThreshold,
     } = getCanvasData(canvas, video);
 
-    // const start = Date.now();
-
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const blocksWide = Math.ceil(canvas.width / blockSize);
     const blocksHigh = Math.ceil(canvas.height / blockSize);
     const whiteBlocks = [];
-    // const whiteBlocksMap: Record<string, boolean> = {};
-    // const staticBlocks = [];
 
     for (let y = 0; y < blocksHigh; y++) {
         for (let x = 0; x < blocksWide; x++) {
@@ -101,45 +67,15 @@ export const computeDarkviewRaw = (
             }
 
             const whitePixelPercentage = whitePixelCount / (blockSize * blockSize);
-            // const entropy = calculateEntropy(ctx, startX, startY, blockSize, blockSize);
 
             if (
                 whitePixelPercentage >= threshold
-                // && entropy < 1
             ) {
-                // whiteBlocksMap[`${x},${y}`] = true;
                 whiteBlocks.push({ x, y, whitePixelPercentage });
-            } else {
-                // staticBlocks.push({ x, y, whitePixelPercentage });
             }
         }
     }
 
-    // for (const staticBlock of staticBlocks) {
-    //     const { x, y } = staticBlock;
-    //     const keys = [
-    //         `${x - 1},${y - 1}`,
-    //         `${x},${y - 1}`,
-    //         `${x + 1},${y - 1}`,
-    //         `${x - 1},${y}`,
-    //         `${x + 1},${y}`,
-    //         `${x - 1},${y + 1}`,
-    //         `${x},${y + 1}`,
-    //         `${x + 1},${y + 1}`,
-    //     ];
-
-    //     let whitePixelCount = 0;
-    //     for (const key of keys) {
-    //         if (whiteBlocksMap[key]) {
-    //             whitePixelCount++;
-    //         }
-    //     }
-
-    //     if (whitePixelCount >= 4) {
-    //         whiteBlocksMap[`${x},${y}`] = true;
-    //         whiteBlocks.push({ x, y, whitePixelCount });
-    //     }
-    // }
 
     for (const block of whiteBlocks) {
         const startX = block.x * blockSize;
@@ -158,17 +94,7 @@ export const computeDarkviewRaw = (
         }
     }
 
-    // console.log({
-    //     whiteBlocks, staticBlocks,
-    // });
-    // const endCompute = Date.now();
-    // console.log('compute', endCompute - start);
-
     ctx.putImageData(imageData, 0, 0);
-
-    // const endPaint = Date.now();
-    // console.log('paint', endPaint - endCompute);
-    // console.log('---');
 }
 
 export const computeDarkviewQuadTree = (

@@ -35,7 +35,7 @@ const getComputes = (
     };
 }
 
-const computeDarkViewRaw = (
+const computeDarkviewRaw = (
     canvas: HTMLCanvasElement,
     video: HTMLVideoElement,
 ) => {
@@ -116,7 +116,7 @@ const computeDarkViewRaw = (
     // console.log('---');
 }
 
-const computeDarkViewQuadTree = (
+const computeDarkviewQuadTree = (
     canvas: HTMLCanvasElement,
     video: HTMLVideoElement,
 ) => {
@@ -133,68 +133,75 @@ const computeDarkViewQuadTree = (
     // ctx.putImageData(imageData, 0, 0);
 }
 
-const computeDarkView = (
+const computeDarkview = (
     canvas: HTMLCanvasElement,
     video: HTMLVideoElement,
 ) => {
-    computeDarkViewRaw(canvas, video);
-    // computeDarkViewQuadTree(canvas, video);
+    computeDarkviewRaw(canvas, video);
+    // computeDarkviewQuadTree(canvas, video);
 }
 
-
-const toggleDarkview = async () => {
-    const canvas = document.getElementById(CANVAS_ID);
-    if (canvas) {
-        canvas.remove();
-    }
-
+const drawDarkview = () => {
     const video = document.getElementsByTagName('video')[0];
     if (!video) {
         return;
     }
 
+    const videoDimensions = video.getBoundingClientRect();
+
+    const canvas = document.createElement('canvas');
+    canvas.id = CANVAS_ID;
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.right = '0';
+    canvas.style.margin = '0 auto';
+    canvas.style.width = videoDimensions.width + 'px';
+    canvas.style.height = videoDimensions.height + 'px';
+    canvas.style.zIndex = '58';
+    canvas.style.pointerEvents = 'none';
+
+    const container = document.getElementsByClassName(VIDEO_DIV_ID)[0];
+    if (!container) {
+        return;
+    }
+    container.appendChild(canvas);
+
+    setTimeout(() => {
+        const videoContentWidth = videoDimensions.width;
+        const videoContentHeight = videoDimensions.height;
+
+        const aspectRatio = videoContentWidth / videoContentHeight;
+        const canvasWidth = videoContentWidth;
+        const canvasHeight = canvasWidth / aspectRatio;
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+
+        // 30 frames per second (1000 ms / 30 frames ≈ 33 ms per frame)
+        const FPS_TIMEOUT = 33;
+
+        interval = setInterval(() => {
+            computeDarkview(canvas, video);
+        }, FPS_TIMEOUT);
+    }, 200);
+}
+
+const cleanupDarkview = () => {
     if (interval) {
         clearInterval(interval);
     }
 
+    const previousCanvas = document.getElementById(CANVAS_ID);
+    if (previousCanvas) {
+        previousCanvas.remove();
+    }
+}
+
+const toggleDarkview = async () => {
+    cleanupDarkview();
+
     if (!toggled) {
-        const videoDimensions = video.getBoundingClientRect();
-
-        const canvas = document.createElement('canvas');
-        canvas.id = CANVAS_ID;
-        canvas.style.position = 'absolute';
-        canvas.style.top = '0';
-        canvas.style.left = '0';
-        canvas.style.right = '0';
-        canvas.style.margin = '0 auto';
-        canvas.style.width = videoDimensions.width + 'px';
-        canvas.style.height = videoDimensions.height + 'px';
-        canvas.style.zIndex = '58';
-        canvas.style.pointerEvents = 'none';
-
-        const container = document.getElementsByClassName(VIDEO_DIV_ID)[0];
-        if (!container) {
-            return;
-        }
-        container.appendChild(canvas);
-
-        setTimeout(() => {
-            const videoContentWidth = videoDimensions.width;
-            const videoContentHeight = videoDimensions.height;
-
-            const aspectRatio = videoContentWidth / videoContentHeight;
-            const canvasWidth = videoContentWidth;
-            const canvasHeight = canvasWidth / aspectRatio;
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-
-            // 30 frames per second (1000 ms / 30 frames ≈ 33 ms per frame)
-            const FPS_TIMEOUT = 33;
-
-            interval = setInterval(function() {
-                computeDarkView(canvas, video);
-            }, FPS_TIMEOUT);
-        }, 200);
+        drawDarkview();
     }
 
     toggled = !toggled;
@@ -209,6 +216,17 @@ const main = async () => {
                 if (event.altKey && event.code === 'KeyD') {
                     toggleDarkview();
                     return;
+                }
+            } catch (error) {
+                return;
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            try {
+                if (toggled) {
+                    cleanupDarkview();
+                    toggleDarkview();
                 }
             } catch (error) {
                 return;

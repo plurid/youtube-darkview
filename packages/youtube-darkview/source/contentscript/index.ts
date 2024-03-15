@@ -1,9 +1,17 @@
 // #region imports
 import {
+    Options,
+} from '~data/interfaces';
+
+import {
+    OPTIONS_KEY,
+} from '~data/constants';
+
+import {
     VIDEO_CONTAINER,
     CANVAS_ID,
     FPS_TIMEOUT,
-} from '../data/constants/contentscript';
+} from '~data/constants/contentscript';
 
 import {
     debounce,
@@ -106,6 +114,17 @@ const main = async () => {
         window.addEventListener('resize', () => {
             cleanupDarkview();
             debouncedResize();
+        });
+
+        chrome.storage.onChanged.addListener((changes) => {
+            try {
+                const options = changes[OPTIONS_KEY].newValue as Options;
+                if (!options) {
+                    return;
+                }
+            } catch (error) {
+                return;
+            }
         });
     } catch (error) {
         return;

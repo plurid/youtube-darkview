@@ -19,6 +19,18 @@
     // #endregion libraries
 
 
+    // #region external
+    import {
+        Options,
+    } from '~data/interfaces';
+
+    import {
+        OPTIONS_KEY,
+        defaultOptions,
+    } from '~data/constants';
+    // #endregion external
+
+
     // #region internal
     import {
         StyledPopup,
@@ -48,14 +60,35 @@ const Popup: React.FC<PopupProperties> = (
     ] = useState(true);
 
     const [
-        activate,
-        setActivate,
-    ] = useState(true);
+        activated,
+        setActivated,
+    ] = useState(false);
+
+    const [
+        type,
+        setType,
+    ] = useState<Options['type']>('content-aware');
+
+    const [
+        threshold,
+        setThreshold,
+    ] = useState(0.6);
+
+    const [
+        level,
+        setLevel,
+    ] = useState(0.6);
+
+    const [
+        blockSize,
+        setBlockSize,
+    ] = useState(20);
     // #endregion state
 
 
     // #region handlers
     const reset = () => {
+        setActivated(false);
     }
     // #endregion handlers
 
@@ -64,6 +97,26 @@ const Popup: React.FC<PopupProperties> = (
     useEffect(() => {
         const load = async () => {
             try {
+                const data = await chrome.storage.local.get(OPTIONS_KEY);
+                if (!data || !data[OPTIONS_KEY]) {
+                    setLoading(false);
+                    return;
+                }
+
+                const {
+                    activated,
+                    type,
+                    blockSize,
+                    level,
+                    threshold,
+                } = data[OPTIONS_KEY] as Options;
+
+                setActivated(activated);
+                setType(type);
+                setBlockSize(blockSize);
+                setLevel(level);
+                setThreshold(threshold);
+
                 setLoading(false);
             } catch (error) {
                 setLoading(false);
@@ -81,6 +134,17 @@ const Popup: React.FC<PopupProperties> = (
 
         const save = async () => {
             try {
+                const options: Options = {
+                    activated,
+                    type,
+                    threshold,
+                    level,
+                    blockSize,
+                };
+
+                await chrome.storage.local.set({
+                    [OPTIONS_KEY]: options,
+                });
             } catch (error) {
                 return;
             }
@@ -88,6 +152,11 @@ const Popup: React.FC<PopupProperties> = (
 
         save();
     }, [
+        activated,
+        type,
+        threshold,
+        level,
+        blockSize,
     ]);
 
     useEffect(() => {
@@ -124,9 +193,9 @@ const Popup: React.FC<PopupProperties> = (
 
             <InputSwitch
                 name="activate [⌥ + D]"
-                checked={activate}
+                checked={activated}
                 atChange={() => {
-                    setActivate(value => !value);
+                    setActivated(value => !value);
                 }}
                 theme={dewiki}
                 style={{
@@ -138,7 +207,6 @@ const Popup: React.FC<PopupProperties> = (
             {/* threshold - 70% */}
             {/* level - 70% */}
             {/* block size - 30 x 30 px */}
-            {/* limit - #ffffff */}
 
             <div>
                 <LinkButton

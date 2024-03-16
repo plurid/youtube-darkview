@@ -13,8 +13,8 @@ export const IN_PRODUCTION = process.env.NODE_ENV === 'production';
 
 
 export const defaultOptions: Options = {
-    activated: false,
-    type: 'content-aware',
+    // type: 'content-aware',
+    type: 'invert',
     threshold: 0.6,
     level: 0.6,
     blockSize: 20,

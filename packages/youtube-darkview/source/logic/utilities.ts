@@ -19,3 +19,9 @@ export function debounce(
         });
     }
 }
+
+
+export const getActiveTab = async () => {
+    const [tab] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
+    return tab;
+}

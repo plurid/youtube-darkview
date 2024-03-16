@@ -5,6 +5,7 @@ import {
 
 import {
     OPTIONS_KEY,
+    defaultOptions,
 } from '~data/constants';
 
 import {
@@ -15,7 +16,7 @@ import {
 
 import {
     debounce,
-} from '../logic/utilities';
+} from '~logic/utilities';
 
 import {
     styleCanvas,
@@ -31,9 +32,12 @@ import {
 // #region module
 let toggled = false;
 let interval: NodeJS.Timeout | undefined;
+let options = defaultOptions;
 
 
-const drawDarkview = () => {
+const drawDarkview = (
+    options: Options,
+) => {
     const video = document.getElementsByTagName('video')[0];
     if (!video) {
         return;
@@ -60,7 +64,7 @@ const drawDarkview = () => {
         canvas.height = canvasHeight;
 
         interval = setInterval(() => {
-            computeDarkview(canvas, video);
+            computeDarkview(canvas, video, options);
         }, FPS_TIMEOUT);
     }, 200);
 }
@@ -76,11 +80,13 @@ const cleanupDarkview = () => {
     }
 }
 
-const toggleDarkview = async () => {
+const toggleDarkview = async (
+    options: Options,
+) => {
     cleanupDarkview();
 
     if (!toggled) {
-        drawDarkview();
+        drawDarkview(options);
     }
 
     toggled = !toggled;
@@ -90,10 +96,15 @@ const toggleDarkview = async () => {
 
 const main = async () => {
     try {
+        const optionsRequest = await chrome.storage.local.get(OPTIONS_KEY);
+        if (optionsRequest && optionsRequest[OPTIONS_KEY]) {
+            options = optionsRequest[OPTIONS_KEY];
+        }
+
         document.addEventListener('keydown', (event) => {
             try {
                 if (event.altKey && event.code === 'KeyD') {
-                    toggleDarkview();
+                    toggleDarkview(options);
                     return;
                 }
             } catch (error) {
@@ -104,7 +115,7 @@ const main = async () => {
         const debouncedResize = debounce(() => {
             try {
                 if (toggled) {
-                    drawDarkview();
+                    drawDarkview(options);
                 }
             } catch (error) {
                 return;
@@ -118,9 +129,30 @@ const main = async () => {
 
         chrome.storage.onChanged.addListener((changes) => {
             try {
-                const options = changes[OPTIONS_KEY].newValue as Options;
-                if (!options) {
+                const newOptions = changes[OPTIONS_KEY].newValue as Options;
+                if (!newOptions) {
                     return;
+                }
+
+                options = newOptions;
+                cleanupDarkview();
+                debouncedResize();
+            } catch (error) {
+                return;
+            }
+        });
+
+        chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
+            try {
+                switch (message.type) {
+                    case 'TOGGLE':
+                        toggleDarkview(options);
+                        break;
+                    case 'GET_STATE':
+                        sendResponse({
+                            toggled,
+                        });
+                        break;
                 }
             } catch (error) {
                 return;

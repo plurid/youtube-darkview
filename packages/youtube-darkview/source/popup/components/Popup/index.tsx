@@ -28,6 +28,10 @@
         OPTIONS_KEY,
         defaultOptions,
     } from '~data/constants';
+
+    import {
+        getActiveTab,
+    } from '~logic/utilities';
     // #endregion external
 
 
@@ -88,8 +92,19 @@ const Popup: React.FC<PopupProperties> = (
 
 
     // #region handlers
+    const activate = async () => {
+        try {
+            setActivated(value => !value);
+            const tab = await getActiveTab();
+            await chrome.tabs.sendMessage(tab.id, {
+                type: 'TOGGLE',
+            });
+        } catch (error) {
+            return;
+        }
+    }
+
     const reset = () => {
-        setActivated(false);
         setType(defaultOptions.type);
         setThreshold(defaultOptions.threshold);
         setLevel(defaultOptions.level);
@@ -99,6 +114,7 @@ const Popup: React.FC<PopupProperties> = (
 
 
     // #region effects
+    /** Load */
     useEffect(() => {
         const load = async () => {
             try {
@@ -109,14 +125,12 @@ const Popup: React.FC<PopupProperties> = (
                 }
 
                 const {
-                    activated,
                     type,
                     blockSize,
                     level,
                     threshold,
                 } = data[OPTIONS_KEY] as Options;
 
-                setActivated(activated);
                 setType(type);
                 setBlockSize(blockSize);
                 setLevel(level);
@@ -132,6 +146,7 @@ const Popup: React.FC<PopupProperties> = (
         load();
     }, []);
 
+    /** Save */
     useEffect(() => {
         if (!mounted.current) {
             return;
@@ -140,7 +155,6 @@ const Popup: React.FC<PopupProperties> = (
         const save = async () => {
             try {
                 const options: Options = {
-                    activated,
                     type,
                     threshold,
                     level,
@@ -164,12 +178,38 @@ const Popup: React.FC<PopupProperties> = (
         blockSize,
     ]);
 
+    /** Mount */
     useEffect(() => {
         mounted.current = true;
 
         return () => {
             mounted.current = false;
         }
+    }, []);
+
+    /** Tab Data */
+    useEffect(() => {
+        const getTabData = async () => {
+            try {
+                const tab = await getActiveTab();
+                const response = await chrome.tabs.sendMessage(tab.id, {
+                    type: 'GET_STATE',
+                });
+                if (!response) {
+                    return;
+                }
+
+                const {
+                    toggled,
+                } = response;
+
+                setActivated(!!toggled);
+            } catch (error) {
+                return;
+            }
+        }
+
+        getTabData();
     }, []);
     // #endregion effects
 
@@ -200,7 +240,7 @@ const Popup: React.FC<PopupProperties> = (
                 name="activate [⌥ + D]"
                 checked={activated}
                 atChange={() => {
-                    setActivated(value => !value);
+                    activate();
                 }}
                 theme={dewiki}
                 style={{

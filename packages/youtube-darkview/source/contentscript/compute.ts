@@ -1,9 +1,4 @@
 import {
-    blockSize,
-    threshold,
-} from '~data/constants/contentscript';
-
-import {
     Options,
 } from '~data/interfaces';
 
@@ -12,6 +7,7 @@ import {
 export const getCanvasData = (
     canvas: HTMLCanvasElement,
     video: HTMLVideoElement,
+    options: Options,
 ) => {
     const ctx = canvas.getContext('2d', {
         willReadFrequently: true,
@@ -22,7 +18,7 @@ export const getCanvasData = (
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
 
-    const whiteThreshold = 255 * threshold;
+    const whiteThreshold = 255 * options.threshold;
 
     return {
         ctx,
@@ -42,7 +38,11 @@ export const computeDarkviewRaw = (
         imageData,
         data,
         whiteThreshold,
-    } = getCanvasData(canvas, video);
+    } = getCanvasData(canvas, video, options);
+
+    const {
+        blockSize,
+    } = options;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
@@ -82,7 +82,7 @@ export const computeDarkviewRaw = (
                 const whitePixelPercentage = whitePixelCount / (blockSize * blockSize);
 
                 if (
-                    whitePixelPercentage >= threshold
+                    whitePixelPercentage >= options.threshold
                 ) {
                     whiteBlocks.push({ x, y, whitePixelPercentage });
                 }
@@ -121,7 +121,7 @@ export const computeDarkviewQuadTree = (
         imageData,
         data,
         whiteThreshold,
-    } = getCanvasData(canvas, video);
+    } = getCanvasData(canvas, video, options);
 
     // const quadtree = new QuadTreeNode(0, 0, canvas.width);
     // quadtree.update(imageData, whiteThreshold);

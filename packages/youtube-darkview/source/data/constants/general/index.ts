@@ -16,7 +16,7 @@ export const defaultOptions: Options = {
     // type: 'content-aware',
     type: 'invert',
     threshold: 0.6,
-    level: 0.6,
+    level: 1,
     blockSize: 20,
 };
 

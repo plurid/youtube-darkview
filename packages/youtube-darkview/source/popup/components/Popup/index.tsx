@@ -39,7 +39,8 @@
     import {
         StyledPopup,
         inputStyle,
-        typeButtonStyle
+        typeButtonStyle,
+        sliderStyle,
     } from './styled';
     // #endregion internal
 // #region imports
@@ -262,6 +263,7 @@ const Popup: React.FC<PopupProperties> = (
                 >
                     invert
                 </button>
+
                 <button
                     onClick={() => setType('content-aware')}
                     style={typeButtonStyle(
@@ -275,10 +277,7 @@ const Popup: React.FC<PopupProperties> = (
 
             <div
                 style={{
-                    display: 'flex',
-                    gap: '2rem',
-                    justifyContent: 'space-between',
-                    width: '100%',
+                    ...sliderStyle,
                 }}
             >
                 <div>
@@ -300,12 +299,9 @@ const Popup: React.FC<PopupProperties> = (
                 />
             </div>
 
-            <div
+            {/* <div
                 style={{
-                    display: 'flex',
-                    gap: '2rem',
-                    justifyContent: 'space-between',
-                    width: '100%',
+                    ...sliderStyle,
                 }}
             >
                 <div>
@@ -325,7 +321,7 @@ const Popup: React.FC<PopupProperties> = (
                     theme={dewiki}
                     level={2}
                 />
-            </div>
+            </div> */}
 
             <div>
                 <LinkButton

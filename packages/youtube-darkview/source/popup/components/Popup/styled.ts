@@ -56,4 +56,12 @@ export const typeButtonStyle = (
     borderTopRightRadius: location === 'right' ? '30px' : '0px',
     borderBottomRightRadius: location === 'right' ? '30px' : '0px',
 });
+
+
+export const sliderStyle = {
+    display: 'flex',
+    gap: '2rem',
+    justifyContent: 'space-between',
+    width: '100%',
+};
 // #endregion module

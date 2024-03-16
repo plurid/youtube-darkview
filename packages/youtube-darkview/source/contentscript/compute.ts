@@ -9,6 +9,11 @@ export const getCanvasData = (
     video: HTMLVideoElement,
     options: Options,
 ) => {
+    const {
+        threshold,
+        // level,
+    } = options;
+
     const ctx = canvas.getContext('2d', {
         willReadFrequently: true,
     });
@@ -18,7 +23,7 @@ export const getCanvasData = (
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
 
-    const whiteThreshold = 255 * options.threshold;
+    const whiteThreshold = 255 * threshold;
 
     return {
         ctx,

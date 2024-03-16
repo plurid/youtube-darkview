@@ -26,6 +26,7 @@ const base = {
             "~common": path.resolve(__dirname, "source/common"),
             "~contentscript": path.resolve(__dirname, "source/contentscript"),
             "~data": path.resolve(__dirname, "source/data"),
+            "~logic": path.resolve(__dirname, "source/logic"),
             "~popup": path.resolve(__dirname, "source/popup"),
         },
     },

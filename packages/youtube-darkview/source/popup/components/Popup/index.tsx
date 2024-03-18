@@ -302,6 +302,30 @@ const Popup: React.FC<PopupProperties> = (
                 />
             </div>
 
+            <div
+                style={{
+                    ...sliderStyle,
+                }}
+            >
+                <div>
+                    block size
+                </div>
+
+                <Slider
+                    name="block size"
+                    value={blockSize}
+                    atChange={(value) => {
+                        setBlockSize(value);
+                    }}
+                    min={5}
+                    max={50}
+                    step={5}
+                    width={150}
+                    theme={dewiki}
+                    level={2}
+                />
+            </div>
+
             {/* <div
                 style={{
                     ...sliderStyle,

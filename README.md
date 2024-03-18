@@ -38,7 +38,7 @@
     <img src="https://raw.githubusercontent.com/plurid/youtube-darkview/master/about/images/ss-1.png" height="500px">
 </p>
 
-The extension is available for [Chrome](https://chrome.google.com/webstore/detail/youtube-darkview).
+The extension is available for [Chrome](https://chromewebstore.google.com/detail/youtube-darkview/hajpdejlnnbhnkeejaodcmfafjfehgee).
 
 Features:
 + toggle with shortcut [alt/option + D]

@@ -3,7 +3,7 @@
     "name" : "YouTube Darkview",
     "short_name" : "YouTube Darkview",
     "description" : "invert YouTube video light backgrounds, content-aware dark viewing mode",
-    "version" : "1.0.0",
+    "version" : "1.0.1",
     "author": "plurid",
 
     "action" : {

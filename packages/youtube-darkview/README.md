@@ -5,7 +5,7 @@
 
 <p align="center">
     <a href="https://chrome.google.com/webstore/detail/youtube-darkview/ehjnomdbkamcdhadcaghaflklcfhgonl">
-        <img src="https://img.shields.io/badge/chrome-v1.0.0-blue.svg?colorB=004F91&style=for-the-badge" alt="Chrome Version">
+        <img src="https://img.shields.io/badge/chrome-v1.0.1-blue.svg?colorB=004F91&style=for-the-badge" alt="Chrome Version">
     </a>
     <a href="https://github.com/plurid/youtube-darkview/blob/master/LICENSE">
         <img src="https://img.shields.io/badge/license-DEL-blue.svg?colorB=1380C3&style=for-the-badge" alt="License">

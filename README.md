@@ -38,6 +38,10 @@
     <img src="https://raw.githubusercontent.com/plurid/youtube-darkview/master/about/images/ss-1.png" height="500px">
 </p>
 
+<p align="center">
+    <img src="https://raw.githubusercontent.com/plurid/youtube-darkview/master/about/images/ss-2.png" height="500px">
+</p>
+
 The extension is available for [Chrome](https://chromewebstore.google.com/detail/youtube-darkview/hajpdejlnnbhnkeejaodcmfafjfehgee).
 
 Features:

@@ -228,6 +228,9 @@ const Popup: React.FC<PopupProperties> = (
     return (
         <StyledPopup
             theme={dewiki}
+            style={{
+                backgroundColor: activated ? 'black' : '#FF0000',
+            }}
         >
             <h1>
                 YouTube Darkview
@@ -238,7 +241,7 @@ const Popup: React.FC<PopupProperties> = (
             </div>
 
             <InputSwitch
-                name="activate [⌥ + D]"
+                name={`${activated ? 'deactivate' : 'activate'} [⌥ + D]`}
                 checked={activated}
                 atChange={() => {
                     activate();

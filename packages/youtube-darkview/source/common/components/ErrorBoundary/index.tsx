@@ -1,17 +1,12 @@
 // #region imports
-    // #region libraries
-    import React from 'react';
-    // #endregion libraries
+// #region libraries
+import React, { type ErrorInfo } from 'react';
+// #endregion libraries
 
-
-    // #region external
-    import {
-        log,
-    } from '~common/utilities';
-    // #endregion external
+// #region external
+import { reportError } from '~common/utilities';
+// #endregion external
 // #region imports
-
-
 
 // #region module
 export interface ErrorBoundaryProperties {
@@ -31,17 +26,17 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProperties, ErrorBounda
         };
     }
 
-    static getDerivedStateFromError(_error: any) {
+    static getDerivedStateFromError(_error: unknown): ErrorBoundaryState {
         return {
             hasError: true,
         };
     }
 
-    componentDidCatch(error: any, info: any) {
-        log(error, info);
+    override componentDidCatch(error: Error, info: ErrorInfo): void {
+        reportError('The popup view crashed', { error, info });
     }
 
-    render() {
+    override render(): React.ReactNode {
         if (this.state.hasError) {
             return this.props.fallback;
         }
@@ -50,8 +45,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProperties, ErrorBounda
     }
 }
 // #endregion module
-
-
 
 // #region exports
 export default ErrorBoundary;

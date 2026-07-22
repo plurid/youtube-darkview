@@ -1,21 +1,5 @@
-// #region imports
-    // #region external
-    import {
-        IN_PRODUCTION,
-    } from '~data/constants';
-    // #endregion external
-// #endregion imports
-
-
-
-// #region module
-export const log = (
-    ...message: any[]
-) => {
-    if (IN_PRODUCTION) {
-        return;
+export const reportError = (context: string, error: unknown): void => {
+    if (process.env.NODE_ENV !== 'production') {
+        console.error(`youtube-darkview :: ${context}`, error);
     }
-
-    console.log('youtube-darkview ::', ...message);
-}
-// #endregion module
+};

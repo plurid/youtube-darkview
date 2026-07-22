@@ -1,167 +1,46 @@
-// #region imports
-import {
-    Options,
-} from '~data/interfaces';
+import { reportError } from '~common/utilities';
+import { type DarkviewResponse, isDarkviewRequest, loadSettings, settingsFromChanges } from '~data';
 
-import {
-    OPTIONS_KEY,
-    defaultOptions,
-} from '~data/constants';
+import { DarkviewEngine } from './engine';
+import { isDarkviewShortcut, isEditableTarget } from './shortcut';
 
-import {
-    VIDEO_CONTAINER,
-    CANVAS_ID,
-    FPS_TIMEOUT,
-} from '~data/constants/contentscript';
+const main = async (): Promise<void> => {
+    const engine = new DarkviewEngine();
+    engine.updateSettings(
+        await loadSettings().catch((error: unknown) => {
+            reportError('Could not load stored settings; using defaults', error);
+            return undefined;
+        }),
+    );
 
-import {
-    debounce,
-} from '~logic/utilities';
+    document.addEventListener('keydown', (event) => {
+        if (isDarkviewShortcut(event) && !isEditableTarget(event.target)) {
+            event.preventDefault();
+            engine.toggle();
+        }
+    });
 
-import {
-    styleCanvas,
-} from './canvas';
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        const settings = settingsFromChanges(changes, areaName);
+        if (settings) {
+            engine.updateSettings(settings);
+        }
+    });
 
-import {
-    computeDarkview,
-} from './compute';
-// #endregion imports
-
-
-
-// #region module
-let toggled = false;
-let interval: NodeJS.Timeout | undefined;
-let options = defaultOptions;
-
-
-const drawDarkview = (
-    options: Options,
-) => {
-    const video = document.getElementsByTagName('video')[0];
-    if (!video) {
-        return;
-    }
-    const videoDimensions = video.getBoundingClientRect();
-
-    const canvas = document.createElement('canvas');
-    styleCanvas(canvas, video);
-
-    const container = document.getElementsByClassName(VIDEO_CONTAINER)[0];
-    if (!container) {
-        return;
-    }
-    container.appendChild(canvas);
-
-    setTimeout(() => {
-        const videoContentWidth = videoDimensions.width;
-        const videoContentHeight = videoDimensions.height;
-
-        const aspectRatio = videoContentWidth / videoContentHeight;
-        const canvasWidth = videoContentWidth;
-        const canvasHeight = canvasWidth / aspectRatio;
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-
-        interval = setInterval(() => {
-            computeDarkview(canvas, video, options);
-        }, FPS_TIMEOUT);
-    }, 200);
-}
-
-const cleanupDarkview = () => {
-    if (interval) {
-        clearInterval(interval);
-    }
-
-    const existingCanvas = document.getElementById(CANVAS_ID);
-    if (existingCanvas) {
-        existingCanvas.remove();
-    }
-}
-
-const toggleDarkview = async (
-    options: Options,
-) => {
-    cleanupDarkview();
-
-    if (!toggled) {
-        drawDarkview(options);
-    }
-
-    toggled = !toggled;
-}
-
-
-
-const main = async () => {
-    try {
-        const optionsRequest = await chrome.storage.local.get(OPTIONS_KEY);
-        if (optionsRequest && optionsRequest[OPTIONS_KEY]) {
-            options = optionsRequest[OPTIONS_KEY];
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+        if (!isDarkviewRequest(message)) {
+            return false;
         }
 
-        document.addEventListener('keydown', (event) => {
-            try {
-                if (event.altKey && event.code === 'KeyD') {
-                    toggleDarkview(options);
-                    return;
-                }
-            } catch (error) {
-                return;
-            }
-        });
+        const status = message.type === 'TOGGLE' ? engine.toggle() : engine.getStatus();
+        const response: DarkviewResponse = { ok: true, status };
+        sendResponse(response);
+        return false;
+    });
 
-        const debouncedResize = debounce(() => {
-            try {
-                if (toggled) {
-                    drawDarkview(options);
-                }
-            } catch (error) {
-                return;
-            }
-        });
+    window.addEventListener('pagehide', () => engine.stop(), { once: true });
+};
 
-        window.addEventListener('resize', () => {
-            cleanupDarkview();
-            debouncedResize();
-        });
-
-        chrome.storage.onChanged.addListener((changes) => {
-            try {
-                const newOptions = changes[OPTIONS_KEY].newValue as Options;
-                if (!newOptions) {
-                    return;
-                }
-
-                options = newOptions;
-                cleanupDarkview();
-                debouncedResize();
-            } catch (error) {
-                return;
-            }
-        });
-
-        chrome.runtime.onMessage.addListener((message, _, sendResponse) => {
-            try {
-                switch (message.type) {
-                    case 'TOGGLE':
-                        toggleDarkview(options);
-                        break;
-                    case 'GET_STATE':
-                        sendResponse({
-                            toggled,
-                        });
-                        break;
-                }
-            } catch (error) {
-                return;
-            }
-        });
-    } catch (error) {
-        return;
-    }
-}
-
-main().catch(() => {});
-// #endregion module
+void main().catch((error: unknown) => {
+    reportError('Could not initialize the content script', error);
+});

@@ -31,11 +31,17 @@ const BACKGROUND_MAX_CHROMA = 41;
 // (text glyphs, gray lines); even slightly tinted pixels - photo shadows,
 // skin, sepia - keep their color where a block straddles a photo edge
 const NEUTRAL_INK_MAX_CHROMA = 24;
+// border blocks flip only near-black ink besides background, so bold glyph
+// bodies stay readable while mid-gray photo edges keep their tone
+const DARK_INK_MAX_LUMINANCE = 90;
 
+// measured on real lecture videos: light-background slides span roughly
+// 0.40-0.75 light ratio even when dense with figures, while dark and
+// colorful footage stays well below 0.3 - the gate ratios sit in that gap
 export const SENSITIVITY_PROFILES: Readonly<Record<DarkviewSensitivity, SensitivityProfile>> = {
     low: { blockFraction: 0.65, gateRatio: 0.45 },
-    balanced: { blockFraction: 0.5, gateRatio: 0.32 },
-    high: { blockFraction: 0.4, gateRatio: 0.22 },
+    balanced: { blockFraction: 0.5, gateRatio: 0.35 },
+    high: { blockFraction: 0.4, gateRatio: 0.28 },
 };
 
 const validateFrame = (frame: PixelFrame): void => {
@@ -155,12 +161,15 @@ export const invertLightBlocks = (frame: PixelFrame, options: BlockInversionOpti
                     const green = data[index + 1] ?? 0;
                     const blue = data[index + 2] ?? 0;
                     if (!isBackground(red, green, blue)) {
-                        if (isBorder) {
-                            continue;
-                        }
                         const chroma = Math.max(red, green, blue) - Math.min(red, green, blue);
                         if (chroma > NEUTRAL_INK_MAX_CHROMA) {
                             continue;
+                        }
+                        if (isBorder) {
+                            const luminance = (2126 * red + 7152 * green + 722 * blue) / 10000;
+                            if (luminance > DARK_INK_MAX_LUMINANCE) {
+                                continue;
+                            }
                         }
                     }
                     data[index] = (255 - red) * intensity;

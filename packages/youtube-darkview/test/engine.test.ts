@@ -100,7 +100,7 @@ describe('DarkviewEngine', () => {
         engine.start();
         expect(overlay.render).toHaveBeenLastCalledWith(
             expect.anything(),
-            { blockFraction: 0.5, blockSize: 20, gateRatio: 0.32, intensity: 0.9 },
+            { blockFraction: 0.5, blockSize: 20, gateRatio: 0.35, intensity: 0.9 },
             expect.any(FrameGate),
         );
 
@@ -109,7 +109,7 @@ describe('DarkviewEngine', () => {
         ).toEqual({ active: true, effect: 'applied' });
         expect(overlay.render).toHaveBeenLastCalledWith(
             expect.anything(),
-            { blockFraction: 0.4, blockSize: 20, gateRatio: 0.22, intensity: 0.7 },
+            { blockFraction: 0.4, blockSize: 20, gateRatio: 0.28, intensity: 0.7 },
             expect.any(FrameGate),
         );
         expect(overlay.attach).toHaveBeenCalledTimes(1);
@@ -346,7 +346,7 @@ describe('CanvasBlockOverlay', () => {
         expect(canvas.style.visibility).toBe('hidden');
 
         const gate = new FrameGate();
-        const options = { blockFraction: 0.5, blockSize: 20, gateRatio: 0.32, intensity: 1 };
+        const options = { blockFraction: 0.5, blockSize: 20, gateRatio: 0.5, intensity: 1 };
         overlay.render(video, options, gate);
         expect(canvas.width).toBe(160);
         expect(canvas.height).toBe(90);
@@ -386,7 +386,7 @@ describe('CanvasBlockOverlay', () => {
         expect(() =>
             overlay.render(
                 video,
-                { blockFraction: 0.5, blockSize: 20, gateRatio: 0.32, intensity: 1 },
+                { blockFraction: 0.5, blockSize: 20, gateRatio: 0.5, intensity: 1 },
                 new FrameGate(),
             ),
         ).toThrow('no readable dimensions');

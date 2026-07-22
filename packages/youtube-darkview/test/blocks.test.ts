@@ -89,6 +89,25 @@ describe('block inversion', () => {
         expect(at(frame, 5, 0)).toEqual([190, 140, 110]);
     });
 
+    it('keeps bold glyph bodies readable in blocks bordering an inverted region', () => {
+        // right block is glyph-dominant: near-black ink must flip to light,
+        // while mid-gray photo tones in the same block keep their value
+        const frame = frameOf(8, 4, (x, y) => {
+            if (x < 4) {
+                return [255, 255, 255];
+            }
+            if (y === 3) {
+                return [150, 150, 150];
+            }
+            return x === 7 ? [255, 255, 255] : [20, 20, 20];
+        });
+
+        expect(invertLightBlocks(frame, options)).toBe(1);
+        expect(at(frame, 7, 0)).toEqual([0, 0, 0]);
+        expect(at(frame, 5, 0)).toEqual([235, 235, 235]);
+        expect(at(frame, 5, 3)).toEqual([150, 150, 150]);
+    });
+
     it('leaves light pockets alone when no inverted region is nearby', () => {
         const frame = frameOf(12, 4, (x) =>
             x < 4 || x === 11 ? [255, 255, 255] : [190, 140, 110],

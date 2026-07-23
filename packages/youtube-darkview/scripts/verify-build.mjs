@@ -76,7 +76,14 @@ const archivePath = path.join(
     'distribution-zip',
     `youtube-darkview-v${manifest.version}.zip`,
 );
-const archiveSize = (await stat(archivePath)).size;
+let archiveSize;
+try {
+    archiveSize = (await stat(archivePath)).size;
+} catch {
+    throw new Error(
+        `Archive ${path.relative(packageRoot, archivePath)} is missing - run "pnpm package" before "pnpm verify:build"`,
+    );
+}
 if (archiveSize > 220_000) {
     throw new Error(`Archive exceeds its 220000 byte budget: ${archiveSize}`);
 }

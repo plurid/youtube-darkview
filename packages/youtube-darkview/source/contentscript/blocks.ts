@@ -93,10 +93,24 @@ const PHOTO_MIN_VARIANCE = 50;
 // photographs occupy rectangles of many blocks; isolated textured blocks
 // (logos, chart glyphs) stay invertible
 const PHOTO_MIN_COMPONENT_BLOCKS = 4;
+// video noise makes borderline blocks oscillate around the seed thresholds;
+// a block that was protected last frame keeps its seed at these lower exit
+// bounds, so photo protection cannot strobe frame to frame
+const PHOTO_EXIT_MIDTONE_SHARE = 0.28;
+const PHOTO_EXIT_VARIANCE = 35;
+// a sparse (L-shaped, diagonal) component would protect a bounding box that
+// is mostly not photo - swallowing unrelated text; below this fill ratio
+// only the component's own blocks are protected
+const PHOTO_MIN_BOX_FILL = 0.45;
 
-// photos are rectangles: protect the bounding box of every large-enough
-// connected component of photo-like blocks, so a photograph's flat backdrop
-// and dark regions are covered along with its textured content
+export interface BlockInversionResult {
+    invertedBlocks: number;
+    protection: Uint8Array;
+}
+
+// photos are rectangles: protect the bounding box of every large-enough,
+// dense-enough connected component of photo-like blocks, so a photograph's
+// flat backdrop and dark regions are covered along with its textured content
 const protectPhotoRegions = (
     seeds: Uint8Array,
     blocksWide: number,
@@ -149,6 +163,14 @@ const protectPhotoRegions = (
             minY = Math.min(minY, blockY);
             maxY = Math.max(maxY, blockY);
         }
+
+        const boxArea = (maxX - minX + 1) * (maxY - minY + 1);
+        if (component.length / boxArea < PHOTO_MIN_BOX_FILL) {
+            for (const block of component) {
+                protectedBlocks[block] = 1;
+            }
+            continue;
+        }
         for (let blockY = minY; blockY <= maxY; blockY += 1) {
             for (let blockX = minX; blockX <= maxX; blockX += 1) {
                 protectedBlocks[blockY * blocksWide + blockX] = 1;
@@ -159,7 +181,11 @@ const protectPhotoRegions = (
     return protectedBlocks;
 };
 
-export const invertLightBlocks = (frame: PixelFrame, options: BlockInversionOptions): number => {
+export const invertLightBlocks = (
+    frame: PixelFrame,
+    options: BlockInversionOptions,
+    previousProtection?: Uint8Array,
+): BlockInversionResult => {
     validateFrame(frame);
     const { data, height, width } = frame;
     const { blockFraction, blockSize, intensity } = options;
@@ -169,9 +195,14 @@ export const invertLightBlocks = (frame: PixelFrame, options: BlockInversionOpti
 
     const blocksWide = Math.ceil(width / blockSize);
     const blocksHigh = Math.ceil(height / blockSize);
-    const backgroundShare = new Float32Array(blocksWide * blocksHigh);
-    const photoSeeds = new Uint8Array(blocksWide * blocksHigh);
-    const qualified = new Uint8Array(blocksWide * blocksHigh);
+    const gridSize = blocksWide * blocksHigh;
+    const stickySeeds =
+        previousProtection && previousProtection.length === gridSize
+            ? previousProtection
+            : undefined;
+    const backgroundShare = new Float64Array(gridSize);
+    const photoSeeds = new Uint8Array(gridSize);
+    const qualified = new Uint8Array(gridSize);
     let invertedBlocks = 0;
 
     for (let blockY = 0; blockY < blocksHigh; blockY += 1) {
@@ -214,9 +245,12 @@ export const invertLightBlocks = (frame: PixelFrame, options: BlockInversionOpti
             backgroundShare[block] = backgroundPixels / blockPixels;
             const mean = luminanceSum / blockPixels;
             const variance = luminanceSquareSum / blockPixels - mean * mean;
+            const midtoneShare = midtonePixels / blockPixels;
             if (
-                midtonePixels / blockPixels >= PHOTO_MIN_MIDTONE_SHARE &&
-                variance >= PHOTO_MIN_VARIANCE
+                (midtoneShare >= PHOTO_MIN_MIDTONE_SHARE && variance >= PHOTO_MIN_VARIANCE) ||
+                (stickySeeds?.[block] === 1 &&
+                    midtoneShare >= PHOTO_EXIT_MIDTONE_SHARE &&
+                    variance >= PHOTO_EXIT_VARIANCE)
             ) {
                 photoSeeds[block] = 1;
             }
@@ -224,7 +258,7 @@ export const invertLightBlocks = (frame: PixelFrame, options: BlockInversionOpti
     }
 
     const protectedBlocks = protectPhotoRegions(photoSeeds, blocksWide, blocksHigh);
-    for (let block = 0; block < qualified.length; block += 1) {
+    for (let block = 0; block < gridSize; block += 1) {
         if (protectedBlocks[block] !== 1 && (backgroundShare[block] ?? 0) >= blockFraction) {
             qualified[block] = 1;
             invertedBlocks += 1;
@@ -296,7 +330,7 @@ export const invertLightBlocks = (frame: PixelFrame, options: BlockInversionOpti
         }
     }
 
-    return invertedBlocks;
+    return { invertedBlocks, protection: protectedBlocks };
 };
 
 export class FrameGate {

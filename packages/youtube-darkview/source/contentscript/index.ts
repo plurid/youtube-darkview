@@ -9,13 +9,9 @@ const main = async (): Promise<void> => {
     const engine = new DarkviewEngine({
         timelineFactory: (videoId) => cachedTimelineFactory(videoId),
     });
-    engine.updateSettings(
-        await loadSettings().catch((error: unknown) => {
-            reportError('Could not load stored settings; using defaults', error);
-            return undefined;
-        }),
-    );
 
+    // listeners come before the settings await so the shortcut and the popup
+    // are never dead during a slow storage read
     document.addEventListener('keydown', (event) => {
         if (isDarkviewShortcut(event) && !isEditableTarget(event.target)) {
             event.preventDefault();
@@ -41,7 +37,16 @@ const main = async (): Promise<void> => {
         return false;
     });
 
-    window.addEventListener('pagehide', () => engine.stop(), { once: true });
+    // not `once`: a bfcache-restored page can be activated again and must
+    // still clean up on its next pagehide (stop is idempotent)
+    window.addEventListener('pagehide', () => engine.stop());
+
+    engine.updateSettings(
+        await loadSettings().catch((error: unknown) => {
+            reportError('Could not load stored settings; using defaults', error);
+            return undefined;
+        }),
+    );
 };
 
 void main().catch((error: unknown) => {

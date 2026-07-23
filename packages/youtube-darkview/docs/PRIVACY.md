@@ -20,7 +20,8 @@ video the user is actively watching, indistinguishable in kind from what the pla
 does when scrubbing. No third party is contacted; nothing is transmitted outward. Computed
 analyses are cached in `chrome.storage.local` (derived numbers about public video content,
 capped at 40 entries, expiring after 8 hours) — local to the browser profile like every
-other extension setting. The extension's permission surface does not change.
+other extension setting. In incognito contexts (the manifest uses spanning mode) the
+cache is never written, so incognito watch activity leaves no trace on disk. The extension's permission surface does not change.
 
 Summary: after Stage 1 the privacy statement above remains true, word for word.
 

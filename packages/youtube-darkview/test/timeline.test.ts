@@ -69,6 +69,27 @@ describe('segment building', () => {
         expect(segments[0]?.stable).toBe(true);
     });
 
+    it('drops invalid samples without breaking a stable run', () => {
+        const segments = buildSegments(
+            [
+                { time: 0, ratio: 0.25 },
+                { time: 10, ratio: 0.24 },
+                { time: 20, ratio: Number.NaN },
+                { time: 30, ratio: 0.26 },
+                { time: 40, ratio: 0.25 },
+            ],
+            10,
+            50,
+        );
+
+        expect(segments.some((segment) => segment.stable)).toBe(true);
+    });
+
+    it('returns nothing for degenerate durations', () => {
+        expect(buildSegments([{ time: 0, ratio: 0.5 }], 0, 10)).toEqual([]);
+        expect(buildSegments([{ time: 0, ratio: 0.5 }], 10, 0)).toEqual([]);
+    });
+
     it('never marks short or jumpy runs as stable', () => {
         const shortRun = buildSegments(
             [

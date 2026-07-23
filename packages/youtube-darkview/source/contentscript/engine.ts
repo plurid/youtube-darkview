@@ -46,17 +46,30 @@ export interface DarkviewEngineOptions {
     timelineFactory?: (videoId: string) => Promise<GateSource | undefined>;
 }
 
+// the gate decision needs only statistics, so unlit frames are answered from
+// a small probe instead of a full-resolution readback (~57 KB vs 4-33 MB)
+const PROBE_MAX_WIDTH = 160;
+const PROBE_MAX_HEIGHT = 90;
+const PROBE_MEASURE_STRIDE = 2;
+
 export class CanvasBlockOverlay implements OverlayRenderer {
     private readonly canvas: HTMLCanvasElement;
     private readonly context: CanvasRenderingContext2D;
+    private lastGeometry = '';
+    private lastProtection: Uint8Array | undefined;
+    private readonly probeCanvas: HTMLCanvasElement;
+    private readonly probeContext: CanvasRenderingContext2D;
 
     public constructor(private readonly document: Document) {
         this.canvas = document.createElement('canvas');
         const context = this.canvas.getContext('2d', { willReadFrequently: true });
-        if (!context) {
+        this.probeCanvas = document.createElement('canvas');
+        const probeContext = this.probeCanvas.getContext('2d', { willReadFrequently: true });
+        if (!context || !probeContext) {
             throw new Error('The browser did not provide a 2D canvas context');
         }
         this.context = context;
+        this.probeContext = probeContext;
 
         this.canvas.id = OVERLAY_ID;
         const style = this.canvas.style;
@@ -75,12 +88,23 @@ export class CanvasBlockOverlay implements OverlayRenderer {
             throw new Error('The video has no parent element to hold the overlay');
         }
         container.append(this.canvas);
+        this.lastGeometry = '';
     }
 
     public render(video: HTMLVideoElement, options: OverlayOptions, gate: FrameGate): void {
+        // YouTube can rebuild the player around the same video element,
+        // silently disconnecting the overlay; heal before rendering into it
+        if (!this.canvas.isConnected) {
+            this.attach(video);
+        }
+
         // a pre-analyzed timeline decides instantly and lets unlit frames
-        // skip every drawing cost; uncovered times fall through to the gate
+        // skip every drawing cost; uncovered times fall through to the gate,
+        // which is kept in step so leaving coverage resumes from fresh state
         const timelineLit = options.timeline?.litAt(video.currentTime, options.gateRatio);
+        if (timelineLit !== undefined) {
+            gate.update(timelineLit, true);
+        }
         if (timelineLit === false) {
             this.canvas.style.visibility = 'hidden';
             return;
@@ -93,6 +117,16 @@ export class CanvasBlockOverlay implements OverlayRenderer {
             throw new Error('The video has no readable dimensions');
         }
 
+        // already dark frames never cross the gate: the overlay stays hidden,
+        // the pristine video shows through, and only the probe was paid for
+        const lit =
+            timelineLit ??
+            gate.update(this.probeRatio(video, width, height) >= options.gateRatio, video.paused);
+        if (!lit) {
+            this.canvas.style.visibility = 'hidden';
+            return;
+        }
+
         if (this.canvas.width !== width) {
             this.canvas.width = width;
         }
@@ -100,31 +134,47 @@ export class CanvasBlockOverlay implements OverlayRenderer {
             this.canvas.height = height;
         }
 
-        const style = this.canvas.style;
-        const top = this.document.defaultView?.getComputedStyle(video).top ?? '';
-        style.top = top.endsWith('px') ? top : '0';
-        style.width = `${width}px`;
-        style.height = `${height}px`;
+        const geometry = `${width}x${height}`;
+        if (geometry !== this.lastGeometry) {
+            this.lastGeometry = geometry;
+            const style = this.canvas.style;
+            const top = this.document.defaultView?.getComputedStyle(video).top ?? '';
+            style.top = top.endsWith('px') ? top : '0';
+            style.width = `${width}px`;
+            style.height = `${height}px`;
+        }
 
         this.context.drawImage(video, 0, 0, width, height);
         const frame = this.context.getImageData(0, 0, width, height);
-
-        // already dark frames never cross the gate: the overlay stays hidden
-        // and the pristine video shows through
-        const lit =
-            timelineLit ?? gate.update(measureLightness(frame) >= options.gateRatio, video.paused);
-        if (!lit) {
-            style.visibility = 'hidden';
-            return;
-        }
-
-        invertLightBlocks(frame, options);
+        const result = invertLightBlocks(frame, options, this.lastProtection);
+        this.lastProtection = result.protection;
         this.context.putImageData(frame, 0, 0);
-        style.visibility = 'visible';
+        this.canvas.style.visibility = 'visible';
+    }
+
+    private probeRatio(video: HTMLVideoElement, width: number, height: number): number {
+        const scale = Math.min(1, PROBE_MAX_WIDTH / width, PROBE_MAX_HEIGHT / height);
+        const probeWidth = Math.max(1, Math.round(width * scale));
+        const probeHeight = Math.max(1, Math.round(height * scale));
+        if (this.probeCanvas.width !== probeWidth) {
+            this.probeCanvas.width = probeWidth;
+        }
+        if (this.probeCanvas.height !== probeHeight) {
+            this.probeCanvas.height = probeHeight;
+        }
+        this.probeContext.drawImage(video, 0, 0, probeWidth, probeHeight);
+        return measureLightness(
+            this.probeContext.getImageData(0, 0, probeWidth, probeHeight),
+            PROBE_MEASURE_STRIDE,
+        );
     }
 
     public detach(): void {
         this.canvas.remove();
+        // never carry a stale frame or protection mask to the next video
+        this.canvas.style.visibility = 'hidden';
+        this.lastProtection = undefined;
+        this.lastGeometry = '';
     }
 }
 
@@ -141,6 +191,7 @@ export class DarkviewEngine {
     private readonly overlayFactory: (document: Document) => OverlayRenderer;
     private rebindTimerIdentifier: number | undefined;
     private renderFailures = 0;
+    private resizeObserver: ResizeObserver | undefined;
     private settings: DarkviewSettings = { ...DEFAULT_SETTINGS };
     private timeline: GateSource | undefined;
     private readonly timelineFactory:
@@ -295,6 +346,13 @@ export class DarkviewEngine {
         candidate.addEventListener('pause', this.handleVideoPauseOrSeek);
         candidate.addEventListener('play', this.handleVideoPlay);
         candidate.addEventListener('seeked', this.handleVideoPauseOrSeek);
+        const ResizeObserverImplementation = this.document.defaultView?.ResizeObserver;
+        if (ResizeObserverImplementation) {
+            // paused videos get no frame callbacks, so geometry changes
+            // (theater mode, fullscreen, window resize) need their own trigger
+            this.resizeObserver = new ResizeObserverImplementation(() => this.renderOnce());
+            this.resizeObserver.observe(candidate);
+        }
         this.configureVideo();
     }
 
@@ -367,13 +425,30 @@ export class DarkviewEngine {
         void factory(videoId)
             .then((timeline) => {
                 if (generation !== this.generation || this.timelineVideoId !== videoId) {
+                    // a discarded fetch must not mark the video as done, or a
+                    // later activation could never get its timeline
+                    if (this.timelineVideoId === videoId) {
+                        this.timelineVideoId = undefined;
+                    }
                     return;
                 }
                 this.timeline = timeline;
                 // repaint the current (possibly paused) frame with the new knowledge
                 this.renderOnce();
             })
-            .catch(() => undefined);
+            .catch(() => {
+                if (this.timelineVideoId === videoId) {
+                    this.timelineVideoId = undefined;
+                }
+            });
+    }
+
+    private isAdShowing(): boolean {
+        // during in-player ads the URL still names the content video, so the
+        // pre-analyzed timeline must not decide for ad frames
+        return Boolean(
+            this.video?.closest('.html5-video-player')?.classList.contains('ad-showing'),
+        );
     }
 
     private attachOverlay(video: HTMLVideoElement): boolean {
@@ -401,7 +476,7 @@ export class DarkviewEngine {
             blockSize: BLOCK_SIZE,
             intensity: this.settings.intensity,
             ...SENSITIVITY_PROFILES[this.settings.sensitivity],
-            ...(this.timeline ? { timeline: this.timeline } : {}),
+            ...(this.timeline && !this.isAdShowing() ? { timeline: this.timeline } : {}),
         };
     }
 
@@ -503,6 +578,8 @@ export class DarkviewEngine {
     private detachVideo(): void {
         this.cancelRendering();
         this.detachOverlay();
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = undefined;
         if (!this.video) {
             return;
         }

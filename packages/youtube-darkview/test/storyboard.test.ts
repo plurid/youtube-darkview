@@ -89,6 +89,36 @@ describe('storyboard spec parsing', () => {
         ]);
     });
 
+    it('rejects specs that point away from ytimg or demand absurd decoding', () => {
+        const level = '|160#90#100#5#5#10000#M$M#rs$S';
+        expect(
+            parseStoryboardSpec(`https://evil.example/sb/x/$L/$N.jpg?sqp=T${level}`, 1000),
+        ).toBeUndefined();
+        expect(
+            parseStoryboardSpec(`http://i.ytimg.com/sb/x/$L/$N.jpg?sqp=T${level}`, 1000),
+        ).toBeUndefined();
+        expect(
+            parseStoryboardSpec(
+                'https://i.ytimg.com/sb/x/$L/$N.jpg?sqp=T|8000#8000#100#5#5#10000#M$M#rs$S',
+                1000,
+            ),
+        ).toBeUndefined();
+        expect(
+            parseStoryboardSpec(
+                'https://i.ytimg.com/sb/x/$L/$N.jpg?sqp=T|160#90#100#20#20#10000#M$M#rs$S',
+                1000,
+            ),
+        ).toBeUndefined();
+    });
+
+    it('prefers the higher resolution on a distance tie', () => {
+        const level = parseStoryboardSpec(
+            'https://i.ytimg.com/sb/x/$L/$N.jpg?sqp=T|140#79#10#5#2#10000#M$M#rs$A|180#101#10#5#2#10000#M$M#rs$B',
+            500,
+        );
+        expect(level?.width).toBe(180);
+    });
+
     it('rejects malformed specs', () => {
         expect(parseStoryboardSpec('just-a-url-no-levels', 100)).toBeUndefined();
         expect(parseStoryboardSpec('base|bad#level', 100)).toBeUndefined();

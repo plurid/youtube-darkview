@@ -330,6 +330,72 @@ describe('DarkviewEngine', () => {
         window.history.pushState({}, '', '/');
     });
 
+    it('retries the timeline after a stop discarded an in-flight fetch', async () => {
+        window.history.pushState({}, '', '/watch?v=abcdefghijk');
+        addVideo();
+        const overlay = fakeOverlay();
+        let resolveFetch: ((value: { litAt: () => boolean } | undefined) => void) | undefined;
+        const timelineFactory = jest.fn(
+            (_videoId: string) =>
+                new Promise<{ litAt: () => boolean } | undefined>((resolve) => {
+                    resolveFetch = resolve;
+                }),
+        );
+        const engine = new DarkviewEngine({
+            document,
+            overlayFactory: () => overlay,
+            timelineFactory,
+        });
+
+        engine.start();
+        expect(timelineFactory).toHaveBeenCalledTimes(1);
+        engine.stop();
+        resolveFetch?.({ litAt: () => true });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        engine.start();
+        expect(timelineFactory).toHaveBeenCalledTimes(2);
+        engine.stop();
+        window.history.pushState({}, '', '/');
+    });
+
+    it('ignores the timeline while the player shows an ad', async () => {
+        window.history.pushState({}, '', '/watch?v=abcdefghijk');
+        const player = document.createElement('div');
+        player.className = 'html5-video-player ad-showing';
+        document.body.append(player);
+        const video = document.createElement('video');
+        Object.defineProperties(video, {
+            paused: { configurable: true, value: true },
+            readyState: { configurable: true, value: HTMLMediaElement.HAVE_CURRENT_DATA },
+        });
+        video.getBoundingClientRect = () =>
+            ({ bottom: 720, height: 720, left: 0, right: 1280, top: 0, width: 1280 }) as DOMRect;
+        player.append(video);
+
+        const overlay = fakeOverlay();
+        const timeline = { litAt: jest.fn(() => true) };
+        const timelineFactory = jest.fn(async (_videoId: string) => timeline);
+        const engine = new DarkviewEngine({
+            document,
+            overlayFactory: () => overlay,
+            timelineFactory,
+        });
+
+        engine.start();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(overlay.render.mock.lastCall?.[1]).not.toHaveProperty('timeline');
+
+        player.classList.remove('ad-showing');
+        video.dispatchEvent(new Event('seeked'));
+        const lastOptions = overlay.render.mock.lastCall?.[1] as { timeline?: unknown } | undefined;
+        expect(lastOptions?.timeline).toBe(timeline);
+        engine.stop();
+        window.history.pushState({}, '', '/');
+    });
+
     it('skips the timeline lookup away from video pages', () => {
         addVideo();
         const overlay = fakeOverlay();
@@ -388,121 +454,144 @@ describe('DarkviewEngine', () => {
 });
 
 describe('CanvasBlockOverlay', () => {
-    it('attaches beside the video, inverts light frames, and hides on dark frames', () => {
-        let pixels = [255, 255, 255, 255];
-        const drawImage = jest.fn();
-        const getImageData = jest.fn(() => ({
-            data: new Uint8ClampedArray(pixels),
-            width: 1,
-            height: 1,
-        }));
-        const putImageData = jest.fn();
-        const canvas = document.createElement('canvas');
-        canvas.getContext = jest.fn(() => ({ drawImage, getImageData, putImageData })) as never;
-        const createElement = jest.spyOn(document, 'createElement').mockReturnValueOnce(canvas);
-        const overlay = new CanvasBlockOverlay(document);
-        createElement.mockRestore();
+    const pixel = (value: number) => ({
+        data: new Uint8ClampedArray([value, value, value, 255]),
+        width: 1,
+        height: 1,
+    });
 
+    const overlayWith = (mainContext: unknown, probeContext: unknown) => {
+        const main = document.createElement('canvas');
+        main.getContext = jest.fn(() => mainContext) as never;
+        const probe = document.createElement('canvas');
+        probe.getContext = jest.fn(() => probeContext) as never;
+        const spy = jest
+            .spyOn(document, 'createElement')
+            .mockReturnValueOnce(main)
+            .mockReturnValueOnce(probe);
+        const overlay = new CanvasBlockOverlay(document);
+        spy.mockRestore();
+        return { overlay, main, probe };
+    };
+
+    const videoInContainer = () => {
         const container = document.createElement('div');
         const video = document.createElement('video');
         container.append(video);
         document.body.append(container);
         video.getBoundingClientRect = () =>
             ({ bottom: 90, height: 90, left: 0, right: 160, top: 0, width: 160 }) as DOMRect;
+        return { container, video };
+    };
+
+    const baseOptions = { blockFraction: 0.5, blockSize: 20, gateRatio: 0.35, intensity: 1 };
+
+    it('gates from a small probe and pays full resolution only for lit frames', () => {
+        let probeValue = 255;
+        const probeContext = {
+            drawImage: jest.fn(),
+            getImageData: jest.fn(() => pixel(probeValue)),
+        };
+        const mainContext = {
+            drawImage: jest.fn(),
+            getImageData: jest.fn(() => pixel(255)),
+            putImageData: jest.fn(),
+        };
+        const { overlay, main } = overlayWith(mainContext, probeContext);
+        const { container, video } = videoInContainer();
         video.style.top = '12px';
 
         overlay.attach(video);
-        expect(canvas.parentElement).toBe(container);
-        expect(canvas.style.pointerEvents).toBe('none');
-        expect(canvas.style.visibility).toBe('hidden');
+        expect(main.parentElement).toBe(container);
+        expect(main.style.visibility).toBe('hidden');
 
         const gate = new FrameGate();
-        const options = { blockFraction: 0.5, blockSize: 20, gateRatio: 0.5, intensity: 1 };
-        overlay.render(video, options, gate);
-        expect(canvas.width).toBe(160);
-        expect(canvas.height).toBe(90);
-        expect(canvas.style.top).toBe('12px');
-        expect(canvas.style.width).toBe('160px');
-        expect(drawImage).toHaveBeenCalledWith(video, 0, 0, 160, 90);
-        const rendered = putImageData.mock.calls[0]?.[0] as { data: Uint8ClampedArray };
+        overlay.render(video, baseOptions, gate);
+        expect(probeContext.drawImage).toHaveBeenCalledTimes(1);
+        expect(mainContext.drawImage).toHaveBeenCalledTimes(1);
+        expect(main.width).toBe(160);
+        expect(main.style.top).toBe('12px');
+        const rendered = mainContext.putImageData.mock.calls[0]?.[0] as {
+            data: Uint8ClampedArray;
+        };
         expect(Array.from(rendered.data)).toEqual([0, 0, 0, 255]);
-        expect(canvas.style.visibility).toBe('visible');
+        expect(main.style.visibility).toBe('visible');
 
-        pixels = [10, 10, 10, 255];
-        overlay.render(video, options, gate);
-        expect(putImageData).toHaveBeenCalledTimes(1);
-        expect(canvas.style.visibility).toBe('hidden');
+        probeValue = 10;
+        overlay.render(video, baseOptions, gate);
+        expect(main.style.visibility).toBe('hidden');
+        expect(probeContext.drawImage).toHaveBeenCalledTimes(2);
+        expect(mainContext.drawImage).toHaveBeenCalledTimes(1);
+        expect(mainContext.putImageData).toHaveBeenCalledTimes(1);
 
         overlay.detach();
-        expect(canvas.parentElement).toBeNull();
+        expect(main.parentElement).toBeNull();
+        expect(main.style.visibility).toBe('hidden');
     });
 
-    it('trusts a pre-analyzed timeline before the live gate', () => {
-        let pixels = [10, 10, 10, 255];
-        const drawImage = jest.fn();
-        const getImageData = jest.fn(() => ({
-            data: new Uint8ClampedArray(pixels),
-            width: 1,
-            height: 1,
-        }));
-        const putImageData = jest.fn();
-        const canvas = document.createElement('canvas');
-        canvas.getContext = jest.fn(() => ({ drawImage, getImageData, putImageData })) as never;
-        const createElement = jest.spyOn(document, 'createElement').mockReturnValueOnce(canvas);
-        const overlay = new CanvasBlockOverlay(document);
-        createElement.mockRestore();
+    it('re-attaches an overlay that the page disconnected', () => {
+        const probeContext = { drawImage: jest.fn(), getImageData: jest.fn(() => pixel(255)) };
+        const mainContext = {
+            drawImage: jest.fn(),
+            getImageData: jest.fn(() => pixel(255)),
+            putImageData: jest.fn(),
+        };
+        const { overlay, main } = overlayWith(mainContext, probeContext);
+        const { container, video } = videoInContainer();
 
-        const container = document.createElement('div');
-        const video = document.createElement('video');
-        container.append(video);
-        document.body.append(container);
-        video.getBoundingClientRect = () =>
-            ({ bottom: 90, height: 90, left: 0, right: 160, top: 0, width: 160 }) as DOMRect;
+        overlay.attach(video);
+        main.remove();
+        expect(main.isConnected).toBe(false);
 
+        overlay.render(video, baseOptions, new FrameGate());
+        expect(main.parentElement).toBe(container);
+        expect(main.style.visibility).toBe('visible');
+    });
+
+    it('trusts a pre-analyzed timeline before the live gate and keeps it in step', () => {
+        const probeContext = { drawImage: jest.fn(), getImageData: jest.fn(() => pixel(255)) };
+        const mainContext = {
+            drawImage: jest.fn(),
+            getImageData: jest.fn(() => pixel(10)),
+            putImageData: jest.fn(),
+        };
+        const { overlay, main } = overlayWith(mainContext, probeContext);
+        const { video } = videoInContainer();
         const gate = new FrameGate();
-        const base = { blockFraction: 0.5, blockSize: 20, gateRatio: 0.35, intensity: 1 };
 
-        // an unlit answer skips every drawing cost
-        overlay.render(video, { ...base, timeline: { litAt: () => false } }, gate);
-        expect(drawImage).not.toHaveBeenCalled();
-        expect(canvas.style.visibility).toBe('hidden');
+        overlay.attach(video);
 
-        // a lit answer overrides what the live gate would say about a dark frame
-        overlay.render(video, { ...base, timeline: { litAt: () => true } }, gate);
-        expect(putImageData).toHaveBeenCalledTimes(1);
-        expect(canvas.style.visibility).toBe('visible');
+        overlay.render(video, { ...baseOptions, timeline: { litAt: () => false } }, gate);
+        expect(probeContext.drawImage).not.toHaveBeenCalled();
+        expect(mainContext.drawImage).not.toHaveBeenCalled();
+        expect(main.style.visibility).toBe('hidden');
+        expect(gate.value).toBe(false);
 
-        // no answer falls back to the live gate
-        pixels = [255, 255, 255, 255];
-        overlay.render(video, { ...base, timeline: { litAt: () => undefined } }, gate);
-        expect(canvas.style.visibility).toBe('visible');
-        expect(putImageData).toHaveBeenCalledTimes(2);
+        overlay.render(video, { ...baseOptions, timeline: { litAt: () => true } }, gate);
+        expect(mainContext.putImageData).toHaveBeenCalledTimes(1);
+        expect(probeContext.drawImage).not.toHaveBeenCalled();
+        expect(main.style.visibility).toBe('visible');
+        expect(gate.value).toBe(true);
+
+        overlay.render(video, { ...baseOptions, timeline: { litAt: () => undefined } }, gate);
+        expect(probeContext.drawImage).toHaveBeenCalledTimes(1);
+        expect(main.style.visibility).toBe('visible');
     });
 
     it('rejects videos without a parent or readable dimensions', () => {
         const context = { drawImage: jest.fn(), getImageData: jest.fn(), putImageData: jest.fn() };
-        const canvas = document.createElement('canvas');
-        canvas.getContext = jest.fn(() => context) as never;
-        const createElement = jest.spyOn(document, 'createElement').mockReturnValueOnce(canvas);
-        const overlay = new CanvasBlockOverlay(document);
-        createElement.mockRestore();
+        const { overlay } = overlayWith(context, context);
 
         const detached = document.createElement('video');
         expect(() => overlay.attach(detached)).toThrow('no parent element');
 
-        const container = document.createElement('div');
-        const video = document.createElement('video');
-        container.append(video);
-        document.body.append(container);
+        const { video } = videoInContainer();
         video.getBoundingClientRect = () =>
             ({ bottom: 0, height: 0, left: 0, right: 0, top: 0, width: 0 }) as DOMRect;
-        expect(() =>
-            overlay.render(
-                video,
-                { blockFraction: 0.5, blockSize: 20, gateRatio: 0.5, intensity: 1 },
-                new FrameGate(),
-            ),
-        ).toThrow('no readable dimensions');
+        overlay.attach(video);
+        expect(() => overlay.render(video, baseOptions, new FrameGate())).toThrow(
+            'no readable dimensions',
+        );
     });
 
     it('requires a 2D canvas context', () => {

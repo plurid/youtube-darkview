@@ -1,6 +1,6 @@
 import { dewiki } from '@plurid/plurid-themes';
 import { InputSwitch, LinkButton, Slider } from '@plurid/plurid-ui-components-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { reportError } from '~common/utilities';
 import {
@@ -66,6 +66,8 @@ const Popup = () => {
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState<DarkviewSettings>({ ...DEFAULT_SETTINGS });
     const [status, setStatus] = useState<DarkviewStatus>();
+    const saveCounter = useRef(0);
+    const toggleInFlight = useRef(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -108,18 +110,27 @@ const Popup = () => {
     const updateSettings = async (patch: Partial<DarkviewSettings>): Promise<void> => {
         const previous = settings;
         const next = normalizeSettings({ ...settings, ...patch, version: 2 });
+        saveCounter.current += 1;
+        const save = saveCounter.current;
         setSettings(next);
         setError(undefined);
         try {
             await saveSettings(next);
         } catch (saveError: unknown) {
             reportError('Could not save popup settings', saveError);
-            setSettings(previous);
-            setError('could not save that setting: try again');
+            // a newer change supersedes this one; rolling back would revert it
+            if (save === saveCounter.current) {
+                setSettings(previous);
+                setError('could not save that setting: try again');
+            }
         }
     };
 
     const toggle = async (): Promise<void> => {
+        if (toggleInFlight.current) {
+            return;
+        }
+        toggleInFlight.current = true;
         setError(undefined);
         try {
             setStatus(await sendToActiveTab({ type: 'TOGGLE' }));
@@ -127,6 +138,8 @@ const Popup = () => {
             reportError('Could not toggle the active tab', toggleError);
             setStatus(undefined);
             setError('open a YouTube video before activating darkview');
+        } finally {
+            toggleInFlight.current = false;
         }
     };
 
@@ -166,7 +179,7 @@ const Popup = () => {
                 {error ?? getStatusText(status, settings.mode)}
             </StatusText>
 
-            <ModeControl aria-label="Mode">
+            <ModeControl role="group" aria-label="Mode">
                 <ModeButton
                     type="button"
                     $location="left"

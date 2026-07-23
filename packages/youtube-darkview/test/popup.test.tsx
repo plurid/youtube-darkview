@@ -167,6 +167,26 @@ describe('Popup', () => {
         );
     });
 
+    it('ignores toggle clicks while one is in flight', async () => {
+        const api = setChrome();
+        render(<Popup />);
+        await screen.findByText(/ready on this page/);
+
+        let resolveMessage: ((value: unknown) => void) | undefined;
+        api.sendMessage.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    resolveMessage = resolve;
+                }),
+        );
+        const switchButton = screen.getByRole('button', { name: /activate \[⌥ \+ D\]/i });
+        fireEvent.click(switchButton);
+        fireEvent.click(switchButton);
+        resolveMessage?.({ ok: true, status: { active: true, effect: 'applied' } });
+
+        await waitFor(() => expect(api.sendMessage).toHaveBeenCalledTimes(2));
+    });
+
     it('keeps preferences usable when the current page has no content script', async () => {
         setChrome({ rejectMessage: true });
         render(<Popup />);

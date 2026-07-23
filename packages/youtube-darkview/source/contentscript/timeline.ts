@@ -63,15 +63,25 @@ export const buildSegments = (
     frameDuration: number,
     duration: number,
 ): TimelineSegment[] => {
-    const sorted = [...samples].sort((left, right) => left.time - right.time);
+    if (!(frameDuration > 0) || !(duration > 0)) {
+        return [];
+    }
+
+    // invalid samples are dropped before stability marking so a single bad
+    // value cannot break an otherwise stable run
+    const sorted = samples
+        .filter(
+            (sample) =>
+                Number.isFinite(sample.time) &&
+                sample.time >= 0 &&
+                sample.time < duration &&
+                Number.isFinite(sample.ratio),
+        )
+        .sort((left, right) => left.time - right.time);
     const stability = markStability(sorted, frameDuration);
     const segments: TimelineSegment[] = [];
 
     sorted.forEach((sample, index) => {
-        if (sample.time >= duration || !Number.isFinite(sample.ratio)) {
-            return;
-        }
-
         const end = Math.min(sample.time + frameDuration, duration);
         const stable = stability[index] === true;
         const previous = segments[segments.length - 1];

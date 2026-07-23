@@ -91,8 +91,8 @@ export const SettingLabel = styled.div`
 export const StatusText = styled.p<{ $error?: boolean }>`
     min-height: 18px;
     max-width: 250px;
-    color: ${({ $error }) => ($error ? '#ffd2d2' : 'rgba(255, 255, 255, 0.74)')};
-    font-size: 11px;
+    color: ${({ $error }) => ($error ? '#ffd2d2' : '#ffffff')};
+    font-size: 12px;
 `;
 
 export const inputStyle = {

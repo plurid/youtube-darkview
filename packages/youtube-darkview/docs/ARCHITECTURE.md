@@ -57,7 +57,11 @@ Every rendered frame passes through four levels, all in `blocks.ts`:
    mid-tone share ≥ 0.35 with luminance variance ≥ 50 — the signature of achromatic
    photographs, which neither chroma nor brightness rules can protect) seed connected
    components; components of ≥ 4 blocks are protected as bounding boxes (photos are
-   rectangles), excluded from qualification and border flipping entirely.
+   rectangles), excluded from qualification and border flipping entirely. Two
+   stabilizers: blocks protected in the previous frame keep their seed at lower exit
+   bounds (share ≥ 0.28, variance ≥ 35), so protection cannot strobe under video noise;
+   and sparse components (bounding-box fill < 0.45 — L-shapes, diagonals) protect only
+   their own blocks, never their hull.
 4. **Per-pixel keying.** Inside qualified blocks, a pixel flips when it is background, or
    when it is neutral ink (`chroma ≤ 24`, `NEUTRAL_INK_MAX_CHROMA`) — text glyphs and gray
    line-work — so even tinted photo shadows survive inside a straddling block. Blocks that
@@ -88,6 +92,16 @@ background ratio even when dense with figures; dark and colorful footage stays w
 - Rendering is paced by `requestVideoFrameCallback` when available — one render per
   presented frame, naturally silent while paused or hidden. Fallback: a
   `RENDER_INTERVAL_MS = 33` ms timer that refuses paused videos.
+- The gate decision for uncovered frames is answered from a ~160×90 probe canvas; the
+  full-resolution readback (the dominant per-frame cost) is paid only for frames that
+  will actually be inverted. Canvas geometry styles are written only when the size
+  changes, and a disconnected overlay (YouTube rebuilding the player) self-heals by
+  re-attaching before the next render.
+- A `ResizeObserver` on the bound video re-renders paused frames when geometry changes
+  (theater mode, fullscreen, window resize).
+- The pre-analyzed timeline is bypassed while the player shows an ad (`.ad-showing`),
+  since ad frames share the content video's URL but not its content; while the timeline
+  answers, the live gate is kept in step so leaving coverage resumes from fresh state.
 - Paused videos are rendered once per state change (pause, seek, visibility return) rather
   than looped.
 - A hidden document suspends the loop (`visibilitychange` resumes it).

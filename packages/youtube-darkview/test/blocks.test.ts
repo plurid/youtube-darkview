@@ -40,7 +40,7 @@ describe('block inversion', () => {
             x === 1 && y === 1 ? [55, 55, 55] : [255, 255, 255],
         );
 
-        expect(invertLightBlocks(frame, options)).toBe(1);
+        expect(invertLightBlocks(frame, options).invertedBlocks).toBe(1);
         expect(at(frame, 0, 0)).toEqual([0, 0, 0]);
         expect(at(frame, 1, 1)).toEqual([200, 200, 200]);
     });
@@ -50,7 +50,7 @@ describe('block inversion', () => {
             x === 2 && y === 2 ? [40, 120, 220] : [250, 250, 250],
         );
 
-        expect(invertLightBlocks(frame, options)).toBe(1);
+        expect(invertLightBlocks(frame, options).invertedBlocks).toBe(1);
         expect(at(frame, 0, 0)).toEqual([5, 5, 5]);
         expect(at(frame, 2, 2)).toEqual([40, 120, 220]);
     });
@@ -58,7 +58,7 @@ describe('block inversion', () => {
     it('leaves white text on a dark background untouched', () => {
         const frame = frameOf(4, 4, (x) => (x === 0 ? [255, 255, 255] : [18, 18, 18]));
 
-        expect(invertLightBlocks(frame, options)).toBe(0);
+        expect(invertLightBlocks(frame, options).invertedBlocks).toBe(0);
         expect(at(frame, 0, 0)).toEqual([255, 255, 255]);
         expect(at(frame, 3, 3)).toEqual([18, 18, 18]);
     });
@@ -66,7 +66,7 @@ describe('block inversion', () => {
     it('leaves photo-like blocks untouched', () => {
         const frame = frameOf(4, 4, () => [190, 140, 110]);
 
-        expect(invertLightBlocks(frame, options)).toBe(0);
+        expect(invertLightBlocks(frame, options).invertedBlocks).toBe(0);
         expect(at(frame, 1, 1)).toEqual([190, 140, 110]);
     });
 
@@ -75,7 +75,7 @@ describe('block inversion', () => {
         // the block qualifies at 50% yet the rim must keep its color
         const frame = frameOf(4, 4, (x) => (x < 2 ? [255, 255, 255] : [96, 61, 38]));
 
-        expect(invertLightBlocks(frame, options)).toBe(1);
+        expect(invertLightBlocks(frame, options).invertedBlocks).toBe(1);
         expect(at(frame, 0, 0)).toEqual([0, 0, 0]);
         expect(at(frame, 3, 0)).toEqual([96, 61, 38]);
     });
@@ -83,7 +83,7 @@ describe('block inversion', () => {
     it('darkens background pixels in blocks bordering an inverted region', () => {
         const frame = frameOf(8, 4, (x) => (x < 4 || x === 7 ? [255, 255, 255] : [190, 140, 110]));
 
-        expect(invertLightBlocks(frame, options)).toBe(1);
+        expect(invertLightBlocks(frame, options).invertedBlocks).toBe(1);
         expect(at(frame, 0, 0)).toEqual([0, 0, 0]);
         expect(at(frame, 7, 0)).toEqual([0, 0, 0]);
         expect(at(frame, 5, 0)).toEqual([190, 140, 110]);
@@ -102,7 +102,7 @@ describe('block inversion', () => {
             return x === 7 ? [255, 255, 255] : [20, 20, 20];
         });
 
-        expect(invertLightBlocks(frame, options)).toBe(1);
+        expect(invertLightBlocks(frame, options).invertedBlocks).toBe(1);
         expect(at(frame, 7, 0)).toEqual([0, 0, 0]);
         expect(at(frame, 5, 0)).toEqual([235, 235, 235]);
         expect(at(frame, 5, 3)).toEqual([150, 150, 150]);
@@ -161,6 +161,49 @@ describe('block inversion', () => {
         expect(at(frame, 8, 0)).toEqual([230, 130, 110]);
     });
 
+    it('keeps borderline photo blocks protected across frames instead of strobing', () => {
+        const photo = (x: number, y: number): readonly [number, number, number] =>
+            (x + y) % 2 === 0 ? [100, 100, 100] : [160, 160, 160];
+        const strong = frameOf(16, 8, (x, y) => (x < 8 ? [255, 255, 255] : photo(x, y)));
+        // next frame: noise weakened one photo block to between the exit and
+        // enter thresholds (5/16 midtones = 0.31)
+        const weak = () =>
+            frameOf(16, 8, (x, y) => {
+                if (x < 8) {
+                    return [255, 255, 255];
+                }
+                if (x < 12 && y < 4) {
+                    return y === 0 || (x === 8 && y === 1) ? [100, 100, 100] : [255, 255, 255];
+                }
+                return photo(x, y);
+            });
+
+        const first = invertLightBlocks(strong, options);
+
+        const withMemory = weak();
+        invertLightBlocks(withMemory, options, first.protection);
+        expect(at(withMemory, 9, 2)).toEqual([255, 255, 255]);
+
+        const withoutMemory = weak();
+        invertLightBlocks(withoutMemory, options);
+        expect(at(withoutMemory, 9, 2)).toEqual([0, 0, 0]);
+    });
+
+    it('protects only sparse component blocks, never their whole bounding box', () => {
+        // an L of photo blocks (left column plus bottom row) must not shield
+        // the white slide area inside its bounding box from inversion
+        const photo = (x: number, y: number): readonly [number, number, number] =>
+            (x + y) % 2 === 0 ? [100, 100, 100] : [160, 160, 160];
+        const frame = frameOf(20, 16, (x, y) => (x < 4 || y >= 12 ? photo(x, y) : [255, 255, 255]));
+
+        const result = invertLightBlocks(frame, options);
+
+        expect(result.invertedBlocks).toBeGreaterThan(0);
+        expect(at(frame, 10, 5)).toEqual([0, 0, 0]);
+        expect(at(frame, 1, 1)).toEqual([100, 100, 100]);
+        expect(at(frame, 10, 14)).toEqual([100, 100, 100]);
+    });
+
     it('keeps isolated textured blocks invertible', () => {
         // a lone noisy block (a logo, a chart glyph) is no photograph: its
         // white pixels still flip through the border rule
@@ -184,7 +227,7 @@ describe('block inversion', () => {
     it('measures clipped edge blocks by their real pixel count', () => {
         const frame = frameOf(6, 4, () => [255, 255, 255]);
 
-        expect(invertLightBlocks(frame, options)).toBe(2);
+        expect(invertLightBlocks(frame, options).invertedBlocks).toBe(2);
         expect(at(frame, 5, 3)).toEqual([0, 0, 0]);
     });
 
@@ -206,7 +249,7 @@ describe('block inversion', () => {
             invertLightBlocks(strict, {
                 ...options,
                 blockFraction: SENSITIVITY_PROFILES.low.blockFraction,
-            }),
+            }).invertedBlocks,
         ).toBe(0);
 
         const permissive = frameOf(4, 4, half);
@@ -214,7 +257,7 @@ describe('block inversion', () => {
             invertLightBlocks(permissive, {
                 ...options,
                 blockFraction: SENSITIVITY_PROFILES.high.blockFraction,
-            }),
+            }).invertedBlocks,
         ).toBe(1);
     });
 

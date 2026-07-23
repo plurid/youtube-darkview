@@ -71,7 +71,11 @@ What color cannot separate, local structure can:
 | Photo content | 267 – 4,700 | ~0.70 (p50) |
 
 Constants: `PHOTO_MIN_MIDTONE_SHARE = 0.35`, `PHOTO_MIN_VARIANCE = 50`,
-`PHOTO_MIN_COMPONENT_BLOCKS = 4`. Live check on the Morphogenesis slide: five protected
+`PHOTO_MIN_COMPONENT_BLOCKS = 4`; hysteresis exits at `PHOTO_EXIT_MIDTONE_SHARE = 0.28`
+and `PHOTO_EXIT_VARIANCE = 35` (a block protected last frame keeps its seed there, so
+protection cannot strobe under noise — simulation showed ~5 flips/s without it); sparse
+components below `PHOTO_MIN_BOX_FILL = 0.45` protect only their own blocks so an L-shaped
+pair of figures cannot shield unrelated slide content inside its bounding box. Live check on the Morphogenesis slide: five protected
 regions, all on actual photographs; on the colored Anthrobots slide: zero regions
 (chroma protection already covers it), so that approved render is unchanged.
 

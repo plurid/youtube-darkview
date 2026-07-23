@@ -22,7 +22,28 @@ const FRAME_MEASURE_STRIDE = 2;
 // partial coverage beats rejection on very long videos: uncovered time
 // simply falls back to the live gate
 const MAX_SPRITES = 40;
+// batching bounds peak memory: each in-flight sprite holds a decoded bitmap
+// plus its sliced frames until measured
+const SPRITE_FETCH_BATCH = 4;
 const TARGET_FRAME_WIDTH = 160;
+// the spec is parsed out of fetched HTML; these bounds ensure a corrupted or
+// hostile spec can neither point the fetches at another origin nor demand
+// absurd decode work
+const MAX_FRAME_PIXELS = 200_000;
+const MAX_CELLS_PER_SPRITE = 100;
+const MAX_FRAME_COUNT = 5_000;
+
+const isAllowedSpriteBase = (baseUrl: string): boolean => {
+    try {
+        const url = new URL(baseUrl);
+        return (
+            url.protocol === 'https:' &&
+            (url.hostname === 'ytimg.com' || url.hostname.endsWith('.ytimg.com'))
+        );
+    } catch {
+        return false;
+    }
+};
 
 export const videoIdFromUrl = (href: string): string | undefined => {
     try {
@@ -66,7 +87,7 @@ export const parseStoryboardSpec = (
 ): StoryboardLevel | undefined => {
     const parts = spec.split('|');
     const baseUrl = parts[0];
-    if (!baseUrl || parts.length < 2) {
+    if (!baseUrl || parts.length < 2 || !isAllowedSpriteBase(baseUrl)) {
         return undefined;
     }
 
@@ -102,8 +123,11 @@ export const parseStoryboardSpec = (
             !rows ||
             width < 1 ||
             frameCount < 1 ||
+            frameCount > MAX_FRAME_COUNT ||
             columns < 1 ||
             rows < 1 ||
+            width * height > MAX_FRAME_PIXELS ||
+            columns * rows > MAX_CELLS_PER_SPRITE ||
             intervalMs === undefined ||
             Number.isNaN(intervalMs) ||
             intervalMs < 0 ||
@@ -112,10 +136,9 @@ export const parseStoryboardSpec = (
         ) {
             return;
         }
-        if (
-            !best ||
-            Math.abs(width - TARGET_FRAME_WIDTH) < Math.abs(best.width - TARGET_FRAME_WIDTH)
-        ) {
+        const distance = Math.abs(width - TARGET_FRAME_WIDTH);
+        const bestDistance = best ? Math.abs(best.width - TARGET_FRAME_WIDTH) : Infinity;
+        if (!best || distance < bestDistance || (distance === bestDistance && width > best.width)) {
             best = { index, width, height, frameCount, columns, rows, intervalMs, name, sigh };
         }
     });
@@ -166,30 +189,28 @@ const browserIO: StoryboardIO = {
             throw new Error(`Sprite request failed with status ${response.status}`);
         }
         const bitmap = await createImageBitmap(await response.blob());
-        const canvas = new OffscreenCanvas(level.width, level.height);
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
         const context = canvas.getContext('2d', { willReadFrequently: true });
         if (!context) {
+            bitmap.close();
             throw new Error('The browser did not provide a 2D canvas context');
         }
+        context.drawImage(bitmap, 0, 0);
+        bitmap.close();
 
         const frames: PixelFrame[] = [];
         for (let row = 0; row < level.rows; row += 1) {
             for (let column = 0; column < level.columns; column += 1) {
-                context.drawImage(
-                    bitmap,
-                    column * level.width,
-                    row * level.height,
-                    level.width,
-                    level.height,
-                    0,
-                    0,
-                    level.width,
-                    level.height,
+                frames.push(
+                    context.getImageData(
+                        column * level.width,
+                        row * level.height,
+                        level.width,
+                        level.height,
+                    ),
                 );
-                frames.push(context.getImageData(0, 0, level.width, level.height));
             }
         }
-        bitmap.close();
         return frames;
     },
 };
@@ -217,21 +238,24 @@ export const fetchStoryboardAnalysis = async (
             return undefined;
         }
 
-        const sprites = await Promise.all(
-            level.spriteUrls.map((url) => io.spriteFrames(url, level)),
-        );
         const samples: TimelineSample[] = [];
         let frameIndex = 0;
-        for (const frames of sprites) {
-            for (const frame of frames) {
-                if (frameIndex >= level.frameCount) {
-                    break;
+        // fetch in small batches and measure immediately so frames are
+        // released as they are consumed instead of all held at once
+        for (let start = 0; start < level.spriteUrls.length; start += SPRITE_FETCH_BATCH) {
+            const batch = level.spriteUrls.slice(start, start + SPRITE_FETCH_BATCH);
+            const sprites = await Promise.all(batch.map((url) => io.spriteFrames(url, level)));
+            for (const frames of sprites) {
+                for (const frame of frames) {
+                    if (frameIndex >= level.frameCount) {
+                        break;
+                    }
+                    samples.push({
+                        time: frameIndex * level.intervalSeconds,
+                        ratio: measureLightness(frame, FRAME_MEASURE_STRIDE),
+                    });
+                    frameIndex += 1;
                 }
-                samples.push({
-                    time: frameIndex * level.intervalSeconds,
-                    ratio: measureLightness(frame, FRAME_MEASURE_STRIDE),
-                });
-                frameIndex += 1;
             }
         }
 

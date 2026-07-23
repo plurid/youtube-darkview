@@ -123,6 +123,45 @@ describe('cached timeline factory', () => {
         expect(timeline?.litAt(5, 0.35)).toBe(true);
     });
 
+    it('never writes the cache in incognito contexts', async () => {
+        const storage = fakeStorage();
+        const fetchAnalysis = jest.fn(async (_videoId: string) => analysisOf(0.6));
+
+        const timeline = await cachedTimelineFactory('abc', {
+            storage,
+            fetchAnalysis,
+            incognito: true,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(timeline?.litAt(5, 0.35)).toBe(true);
+        expect(storage.set).not.toHaveBeenCalled();
+    });
+
+    it('rejects out-of-range ratios and future-dated entries', async () => {
+        const storage = fakeStorage({
+            [CACHE_KEY]: {
+                version: 1,
+                entries: {
+                    hot: { duration: 20, frameDuration: 10, ratios: [5, 0.5], storedAt: 5 },
+                    future: {
+                        duration: 20,
+                        frameDuration: 10,
+                        ratios: [0.5, 0.5],
+                        storedAt: 99_999,
+                    },
+                },
+            },
+        });
+        const fetchAnalysis = jest.fn(async (_videoId: string) => analysisOf(0.2));
+
+        await cachedTimelineFactory('hot', { storage, fetchAnalysis, now: () => 10 });
+        expect(fetchAnalysis).toHaveBeenCalledTimes(1);
+
+        await cachedTimelineFactory('future', { storage, fetchAnalysis, now: () => 10 });
+        expect(fetchAnalysis).toHaveBeenCalledTimes(2);
+    });
+
     it('returns nothing when the analysis is unavailable', async () => {
         const storage = fakeStorage();
         const fetchAnalysis = jest.fn(async (_videoId: string) => undefined);

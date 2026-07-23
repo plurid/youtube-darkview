@@ -9,6 +9,7 @@ const CACHE_VERSION = 1;
 // decimals, keeping a typical video near 2 KB of the 10 MB storage quota
 const MAX_ENTRIES = 40;
 const MAX_AGE_MS = 8 * 60 * 60 * 1000;
+const MAX_RATIOS = 4096;
 const RATIO_PRECISION = 1000;
 
 interface CacheEntry {
@@ -28,8 +29,14 @@ type CacheStorage = Pick<chrome.storage.StorageArea, 'get' | 'set'>;
 export interface TimelineFactoryOptions {
     storage?: CacheStorage;
     fetchAnalysis?: (videoId: string) => Promise<StoryboardAnalysis | undefined>;
+    incognito?: boolean;
     now?: () => number;
 }
+
+// in spanning incognito mode the cache would otherwise write incognito
+// watch activity into the regular profile's on-disk storage
+const inIncognitoContext = (): boolean =>
+    typeof chrome !== 'undefined' && chrome.extension?.inIncognitoContext === true;
 
 const isEntry = (value: unknown): value is CacheEntry => {
     if (typeof value !== 'object' || value === null) {
@@ -44,7 +51,8 @@ const isEntry = (value: unknown): value is CacheEntry => {
         Number.isFinite(entry.storedAt) &&
         Array.isArray(entry.ratios) &&
         entry.ratios.length > 0 &&
-        entry.ratios.every((ratio) => Number.isFinite(ratio))
+        entry.ratios.length <= MAX_RATIOS &&
+        entry.ratios.every((ratio) => Number.isFinite(ratio) && ratio >= 0 && ratio <= 1)
     );
 };
 
@@ -104,8 +112,11 @@ export const cachedTimelineFactory = async (
     let cached: CacheEntry | undefined;
     try {
         const entry = (await readCache(storage)).entries[videoId];
-        if (isEntry(entry) && now() - entry.storedAt <= MAX_AGE_MS) {
-            cached = entry;
+        if (isEntry(entry)) {
+            const age = now() - entry.storedAt;
+            if (age >= 0 && age <= MAX_AGE_MS) {
+                cached = entry;
+            }
         }
     } catch {
         cached = undefined;
@@ -123,7 +134,9 @@ export const cachedTimelineFactory = async (
     }
 
     // caching is best effort; a failed write never costs the fresh analysis
-    void storeAnalysis(videoId, analysis, storage, now()).catch(() => undefined);
+    if (!(options.incognito ?? inIncognitoContext())) {
+        void storeAnalysis(videoId, analysis, storage, now()).catch(() => undefined);
+    }
 
     return new GateTimeline(
         buildSegments(analysis.samples, analysis.frameDuration, analysis.duration),

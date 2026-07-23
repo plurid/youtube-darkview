@@ -68,6 +68,15 @@ against `i.ytimg.com`, and the resulting blob passes through `createImageBitmap`
 
 The extension's permission surface is unchanged by Stage 1.
 
+## Validation and fetch discipline
+
+The spec is parsed out of fetched HTML, so the parser trusts nothing: the sprite base URL
+must be `https:` on `ytimg.com` or a subdomain, and levels are rejected when
+`width × height > 200,000`, `columns × rows > 100`, or `frameCount > 5,000` — a corrupted
+or hostile spec can neither redirect the fetches nor demand absurd decode work. Sprites
+are fetched in batches of 4 and measured immediately, capping peak memory near a few
+megabytes instead of holding every decoded sprite at once.
+
 ## Level selection and budget
 
 Prefer the level whose width is nearest 160 px (L2 above) — it matches the analysis

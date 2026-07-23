@@ -41,7 +41,7 @@ The only permission is `storage`. There is no network use of any kind.
 
 ## The content-aware decision ladder
 
-Every rendered frame passes through three levels, all in `blocks.ts`:
+Every rendered frame passes through four levels, all in `blocks.ts`:
 
 1. **Frame gate.** `measureLightness` samples the frame on a stride of 4
    (`MEASURE_STRIDE`) and reports the share of *background* pixels. A pixel is background
@@ -53,7 +53,12 @@ Every rendered frame passes through three levels, all in `blocks.ts`:
 2. **Block qualification.** `invertLightBlocks` divides the frame into `BLOCK_SIZE = 20` px
    blocks (clipped edge blocks measured by their real pixel count) and qualifies a block
    when its background-pixel fraction reaches the profile's `blockFraction`.
-3. **Per-pixel keying.** Inside qualified blocks, a pixel flips when it is background, or
+3. **Photo protection.** Blocks whose content is continuous neutral tone (neutral
+   mid-tone share ≥ 0.35 with luminance variance ≥ 50 — the signature of achromatic
+   photographs, which neither chroma nor brightness rules can protect) seed connected
+   components; components of ≥ 4 blocks are protected as bounding boxes (photos are
+   rectangles), excluded from qualification and border flipping entirely.
+4. **Per-pixel keying.** Inside qualified blocks, a pixel flips when it is background, or
    when it is neutral ink (`chroma ≤ 24`, `NEUTRAL_INK_MAX_CHROMA`) — text glyphs and gray
    line-work — so even tinted photo shadows survive inside a straddling block. Blocks that
    merely *border* a qualified region flip only background pixels and near-black ink

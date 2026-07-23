@@ -1,7 +1,10 @@
 # Photo protection
 
-Status: **design only — nothing here is implemented.** The target of the next quality
-iteration of the block engine ([ARCHITECTURE.md](./ARCHITECTURE.md)).
+Status: **implemented** in `source/contentscript/blocks.ts` (2026-07-23). The measured
+bounds and their evidence are below; the mechanism is as designed, with one correction
+found during live validation: seeding counts only **neutral** mid-tones (chroma ≤ 41),
+because colored content is already chroma-protected pixel by pixel and colored text would
+otherwise wrongly shield its own background from inversion.
 
 ## The remaining artifact class
 
@@ -58,6 +61,19 @@ What color cannot separate, local structure can:
 - **Photo edges**: blocks straddling photo and background remain the hard case; the
   region pass plus the existing border rules decide them. Acceptance bar: no regression
   on the current test slides (title readability, seamless background up to photo edges).
+
+## Measured bounds (Levin lecture, 2026-07-23)
+
+| Region | Block variance (p50) | Neutral mid-tone share |
+|---|---|---|
+| Slide background | 0 (p90 = 0) | 0.00 |
+| Title / body text | 6,531 – 11,753 | ≤ 0.22 (p90) |
+| Photo content | 267 – 4,700 | ~0.70 (p50) |
+
+Constants: `PHOTO_MIN_MIDTONE_SHARE = 0.35`, `PHOTO_MIN_VARIANCE = 50`,
+`PHOTO_MIN_COMPONENT_BLOCKS = 4`. Live check on the Morphogenesis slide: five protected
+regions, all on actual photographs; on the colored Anthrobots slide: zero regions
+(chroma protection already covers it), so that approved render is unchanged.
 
 ## Validation plan
 

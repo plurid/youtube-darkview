@@ -119,6 +119,68 @@ describe('block inversion', () => {
         expect(at(frame, 6, 0)).toEqual([190, 140, 110]);
     });
 
+    it('protects whole photo regions including their white backdrop and dark tones', () => {
+        // left half: slide background; right half: a 2x2-block grayscale photo
+        // (noisy midtones) containing one white backdrop pixel and one near-black
+        // pixel - both would flip under the border rules without protection
+        const frame = frameOf(16, 8, (x, y) => {
+            if (x < 8) {
+                return [255, 255, 255];
+            }
+            if (x === 8 && y === 0) {
+                return [255, 255, 255];
+            }
+            if (x === 9 && y === 0) {
+                return [30, 30, 30];
+            }
+            return (x + y) % 2 === 0 ? [100, 100, 100] : [160, 160, 160];
+        });
+
+        invertLightBlocks(frame, options);
+
+        expect(at(frame, 0, 0)).toEqual([0, 0, 0]);
+        expect(at(frame, 8, 0)).toEqual([255, 255, 255]);
+        expect(at(frame, 9, 0)).toEqual([30, 30, 30]);
+        expect(at(frame, 10, 1)).toEqual([160, 160, 160]);
+    });
+
+    it('never lets colored content seed protection', () => {
+        // colored text is chroma-protected pixel by pixel; its background
+        // must keep inverting rather than being shielded as a photo
+        const frame = frameOf(16, 8, (x, y) => {
+            if (x < 8) {
+                return [255, 255, 255];
+            }
+            return (x + y) % 2 === 0 ? [230, 130, 110] : [255, 255, 255];
+        });
+
+        invertLightBlocks(frame, options);
+
+        expect(at(frame, 0, 0)).toEqual([0, 0, 0]);
+        expect(at(frame, 9, 0)).toEqual([0, 0, 0]);
+        expect(at(frame, 8, 0)).toEqual([230, 130, 110]);
+    });
+
+    it('keeps isolated textured blocks invertible', () => {
+        // a lone noisy block (a logo, a chart glyph) is no photograph: its
+        // white pixels still flip through the border rule
+        const frame = frameOf(12, 4, (x, y) => {
+            if (x < 4 || x >= 8) {
+                return [255, 255, 255];
+            }
+            if (x === 4 && y === 0) {
+                return [255, 255, 255];
+            }
+            return (x + y) % 2 === 0 ? [100, 100, 100] : [160, 160, 160];
+        });
+
+        invertLightBlocks(frame, options);
+
+        expect(at(frame, 0, 0)).toEqual([0, 0, 0]);
+        expect(at(frame, 4, 0)).toEqual([0, 0, 0]);
+        expect(at(frame, 5, 0)).toEqual([160, 160, 160]);
+    });
+
     it('measures clipped edge blocks by their real pixel count', () => {
         const frame = frameOf(6, 4, () => [255, 255, 255]);
 

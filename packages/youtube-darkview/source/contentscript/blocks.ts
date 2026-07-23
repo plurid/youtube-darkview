@@ -78,6 +78,87 @@ export const measureLightness = (frame: PixelFrame, stride: number = MEASURE_STR
     return sampled === 0 ? 0 : background / sampled;
 };
 
+// photo content is what neither color nor brightness can protect: achromatic
+// photographs. Their signature is continuous NEUTRAL tone - a high share of
+// low-chroma mid-range luminance with real local variance - while slide
+// backgrounds are perfectly flat, text is bimodal (measured: slide background
+// variance p90 = 0, text mid-tone share <= 0.22, photo content ~0.70), and
+// colored content of any kind is already chroma-protected pixel by pixel, so
+// it must not seed protection (colored text would keep its background bright)
+const MIDTONE_MIN_LUMINANCE = 64;
+const MIDTONE_MAX_LUMINANCE = 192;
+const MIDTONE_MAX_CHROMA = 41;
+const PHOTO_MIN_MIDTONE_SHARE = 0.35;
+const PHOTO_MIN_VARIANCE = 50;
+// photographs occupy rectangles of many blocks; isolated textured blocks
+// (logos, chart glyphs) stay invertible
+const PHOTO_MIN_COMPONENT_BLOCKS = 4;
+
+// photos are rectangles: protect the bounding box of every large-enough
+// connected component of photo-like blocks, so a photograph's flat backdrop
+// and dark regions are covered along with its textured content
+const protectPhotoRegions = (
+    seeds: Uint8Array,
+    blocksWide: number,
+    blocksHigh: number,
+): Uint8Array => {
+    const protectedBlocks = new Uint8Array(blocksWide * blocksHigh);
+    const visited = new Uint8Array(blocksWide * blocksHigh);
+    const stack: number[] = [];
+
+    for (let start = 0; start < seeds.length; start += 1) {
+        if (seeds[start] !== 1 || visited[start] === 1) {
+            continue;
+        }
+
+        const component: number[] = [];
+        stack.push(start);
+        visited[start] = 1;
+        while (stack.length > 0) {
+            const block = stack.pop() as number;
+            component.push(block);
+            const blockX = block % blocksWide;
+            const blockY = (block - blockX) / blocksWide;
+            const neighbors = [
+                blockX > 0 ? block - 1 : -1,
+                blockX < blocksWide - 1 ? block + 1 : -1,
+                blockY > 0 ? block - blocksWide : -1,
+                blockY < blocksHigh - 1 ? block + blocksWide : -1,
+            ];
+            for (const neighbor of neighbors) {
+                if (neighbor >= 0 && seeds[neighbor] === 1 && visited[neighbor] !== 1) {
+                    visited[neighbor] = 1;
+                    stack.push(neighbor);
+                }
+            }
+        }
+
+        if (component.length < PHOTO_MIN_COMPONENT_BLOCKS) {
+            continue;
+        }
+
+        let minX = blocksWide;
+        let maxX = -1;
+        let minY = blocksHigh;
+        let maxY = -1;
+        for (const block of component) {
+            const blockX = block % blocksWide;
+            const blockY = (block - blockX) / blocksWide;
+            minX = Math.min(minX, blockX);
+            maxX = Math.max(maxX, blockX);
+            minY = Math.min(minY, blockY);
+            maxY = Math.max(maxY, blockY);
+        }
+        for (let blockY = minY; blockY <= maxY; blockY += 1) {
+            for (let blockX = minX; blockX <= maxX; blockX += 1) {
+                protectedBlocks[blockY * blocksWide + blockX] = 1;
+            }
+        }
+    }
+
+    return protectedBlocks;
+};
+
 export const invertLightBlocks = (frame: PixelFrame, options: BlockInversionOptions): number => {
     validateFrame(frame);
     const { data, height, width } = frame;
@@ -88,6 +169,8 @@ export const invertLightBlocks = (frame: PixelFrame, options: BlockInversionOpti
 
     const blocksWide = Math.ceil(width / blockSize);
     const blocksHigh = Math.ceil(height / blockSize);
+    const backgroundShare = new Float32Array(blocksWide * blocksHigh);
+    const photoSeeds = new Uint8Array(blocksWide * blocksHigh);
     const qualified = new Uint8Array(blocksWide * blocksHigh);
     let invertedBlocks = 0;
 
@@ -100,22 +183,51 @@ export const invertLightBlocks = (frame: PixelFrame, options: BlockInversionOpti
             const endX = Math.min(startX + blockSize, width);
 
             let backgroundPixels = 0;
+            let luminanceSum = 0;
+            let luminanceSquareSum = 0;
+            let midtonePixels = 0;
             for (let y = startY; y < endY; y += 1) {
                 let index = (y * width + startX) * 4;
                 for (let x = startX; x < endX; x += 1, index += 4) {
-                    if (
-                        isBackground(data[index] ?? 0, data[index + 1] ?? 0, data[index + 2] ?? 0)
-                    ) {
+                    const red = data[index] ?? 0;
+                    const green = data[index + 1] ?? 0;
+                    const blue = data[index + 2] ?? 0;
+                    if (isBackground(red, green, blue)) {
                         backgroundPixels += 1;
+                    }
+                    const luminance = (2126 * red + 7152 * green + 722 * blue) / 10000;
+                    luminanceSum += luminance;
+                    luminanceSquareSum += luminance * luminance;
+                    if (
+                        luminance >= MIDTONE_MIN_LUMINANCE &&
+                        luminance < MIDTONE_MAX_LUMINANCE &&
+                        Math.max(red, green, blue) - Math.min(red, green, blue) <=
+                            MIDTONE_MAX_CHROMA
+                    ) {
+                        midtonePixels += 1;
                     }
                 }
             }
 
             const blockPixels = (endX - startX) * (endY - startY);
-            if (backgroundPixels / blockPixels >= blockFraction) {
-                qualified[blockY * blocksWide + blockX] = 1;
-                invertedBlocks += 1;
+            const block = blockY * blocksWide + blockX;
+            backgroundShare[block] = backgroundPixels / blockPixels;
+            const mean = luminanceSum / blockPixels;
+            const variance = luminanceSquareSum / blockPixels - mean * mean;
+            if (
+                midtonePixels / blockPixels >= PHOTO_MIN_MIDTONE_SHARE &&
+                variance >= PHOTO_MIN_VARIANCE
+            ) {
+                photoSeeds[block] = 1;
             }
+        }
+    }
+
+    const protectedBlocks = protectPhotoRegions(photoSeeds, blocksWide, blocksHigh);
+    for (let block = 0; block < qualified.length; block += 1) {
+        if (protectedBlocks[block] !== 1 && (backgroundShare[block] ?? 0) >= blockFraction) {
+            qualified[block] = 1;
+            invertedBlocks += 1;
         }
     }
 
@@ -143,7 +255,11 @@ export const invertLightBlocks = (frame: PixelFrame, options: BlockInversionOpti
         const endY = Math.min(startY + blockSize, height);
 
         for (let blockX = 0; blockX < blocksWide; blockX += 1) {
-            const isQualified = qualified[blockY * blocksWide + blockX] === 1;
+            const block = blockY * blocksWide + blockX;
+            if (protectedBlocks[block] === 1) {
+                continue;
+            }
+            const isQualified = qualified[block] === 1;
             // a block bordering an inverted region flips only its unambiguous
             // background pixels, so the background darkens seamlessly up to
             // photo and diagram edges without ever touching their content

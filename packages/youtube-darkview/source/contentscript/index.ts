@@ -3,9 +3,12 @@ import { type DarkviewResponse, isDarkviewRequest, loadSettings, settingsFromCha
 
 import { DarkviewEngine } from './engine';
 import { isDarkviewShortcut, isEditableTarget } from './shortcut';
+import { fetchGateTimeline } from './storyboard';
 
 const main = async (): Promise<void> => {
-    const engine = new DarkviewEngine();
+    const engine = new DarkviewEngine({
+        timelineFactory: (videoId) => fetchGateTimeline(videoId),
+    });
     engine.updateSettings(
         await loadSettings().catch((error: unknown) => {
             reportError('Could not load stored settings; using defaults', error);

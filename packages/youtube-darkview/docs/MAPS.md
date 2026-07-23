@@ -1,8 +1,8 @@
 # Darkview Maps
 
 The design for evolving YouTube Darkview from a purely real-time engine into one driven by
-per-video analysis maps. Status: **design document — Stage 1 is planned, nothing here is
-implemented yet.** The engine it builds on is described in [ARCHITECTURE.md](./ARCHITECTURE.md);
+per-video analysis maps. Status: **Stage 1 is implemented (manifest 1.1.0); Stage 2 and
+beyond remain design only.** The engine it builds on is described in [ARCHITECTURE.md](./ARCHITECTURE.md);
 the map data format in [MAP_FORMAT.md](./MAP_FORMAT.md); the storyboard mechanics in
 [STORYBOARDS.md](./STORYBOARDS.md); the privacy consequences in [PRIVACY.md](./PRIVACY.md).
 
@@ -28,8 +28,9 @@ are structural to that position:
 |---|---|
 | Michael Levin lecture (`K8BmMU1Tm-I`), 7 samples across 49 min | 0.46 – 0.65 |
 | Zhigang Suo seminar (`45U-Q-CZ3nI`), 6 samples across 66 min | 0.40 – 0.74 |
+| Dark-dominant slides in the same lecture (large dark imagery, white margins) | 0.19 – 0.31, held stable for up to 200 s |
 | Synthetic dark slide (white text, bright photos on near-black) | ≈ 0.15 |
-| Dark/colorful footage (trailer) | ≪ 0.3, gate never lit |
+| Dark/colorful footage (Clayface trailer, 74 storyboard frames) | 0.00 – 0.10, zero frames in the 0.12–0.35 band |
 
 The gap between "light slides, however busy" (≥ 0.40) and "everything else" (≤ 0.3) is what
 the gate thresholds exploit; maps make the same decision with per-video knowledge instead of
@@ -55,7 +56,14 @@ analysis budget this extension has always used. On activation, the extension:
    storyboard frame — a whole-video gate timeline in roughly 1–2 seconds.
 3. Builds a `GateTimeline`: time-indexed segments carrying measured **ratios** (not
    booleans — the lit decision is made at read time against the viewer's sensitivity, so
-   the slider keeps working and one map serves all settings).
+   the slider keeps working and one map serves all settings). Segments also carry a
+   **stability flag**: runs of near-constant ratios (Δ ≤ 0.05 for ≥ 24 s) mark a static
+   slide. At read time a stable segment lights the gate at a reduced floor
+   (`gateRatio × 0.4`), so dark-dominant slides — large dark imagery with glaring white
+   margins, measuring only ~0.2–0.3 — still get their light regions inverted, while
+   footage (which never sustains a dim-neutral ratio; measured zero such frames across a
+   whole trailer) stays untouched. This is knowledge only pre-analysis can have; the live
+   gate cannot see 24 seconds ahead.
 4. The renderer consults the timeline before the live `FrameGate`. Where the timeline has
    coverage, decisions are instant, flicker-free, seek-proof, and unlit frames cost nothing.
    Where it does not (live streams, missing storyboards, out-of-range times), the live gate
@@ -71,8 +79,12 @@ Sketch of the implementation surface:
   engine resolves the current video id (watch URL) and builds the timeline lazily on first
   activation per video, generation-guarded like all its async work.
 
+Pre-analysis is user-controllable: a `preanalysis` setting (default on, toggle in the
+popup's content-aware section) disables the storyboard step entirely, leaving the live
+gate as the sole decision source.
+
 Non-goals for Stage 1: no persistence (maps are in-memory per page), no uploads, no new
-permissions, no settings changes.
+permissions.
 
 ## Stage 2 — community map service (direction only, not committed)
 

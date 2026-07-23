@@ -15,6 +15,8 @@ module.exports = {
         'source/contentscript/blocks.ts',
         'source/contentscript/engine.ts',
         'source/contentscript/shortcut.ts',
+        'source/contentscript/storyboard.ts',
+        'source/contentscript/timeline.ts',
         'source/data/*.ts',
         'source/logic/*.ts',
         'source/popup/components/Popup/index.tsx',

@@ -9,6 +9,7 @@ import {
     measureLightness,
     SENSITIVITY_PROFILES,
 } from './blocks';
+import { videoIdFromUrl } from './storyboard';
 
 const FILTER_ATTRIBUTE = 'data-youtube-darkview';
 const FILTER_INTENSITY_PROPERTY = '--youtube-darkview-intensity';
@@ -24,8 +25,13 @@ type VideoWithFrameCallback = HTMLVideoElement & {
     requestVideoFrameCallback?: (callback: () => void) => number;
 };
 
+export interface GateSource {
+    litAt(time: number, gateRatio: number): boolean | undefined;
+}
+
 export interface OverlayOptions extends BlockInversionOptions {
     gateRatio: number;
+    timeline?: GateSource;
 }
 
 export interface OverlayRenderer {
@@ -37,6 +43,7 @@ export interface OverlayRenderer {
 export interface DarkviewEngineOptions {
     document?: Document;
     overlayFactory?: (document: Document) => OverlayRenderer;
+    timelineFactory?: (videoId: string) => Promise<GateSource | undefined>;
 }
 
 export class CanvasBlockOverlay implements OverlayRenderer {
@@ -71,6 +78,14 @@ export class CanvasBlockOverlay implements OverlayRenderer {
     }
 
     public render(video: HTMLVideoElement, options: OverlayOptions, gate: FrameGate): void {
+        // a pre-analyzed timeline decides instantly and lets unlit frames
+        // skip every drawing cost; uncovered times fall through to the gate
+        const timelineLit = options.timeline?.litAt(video.currentTime, options.gateRatio);
+        if (timelineLit === false) {
+            this.canvas.style.visibility = 'hidden';
+            return;
+        }
+
         const dimensions = video.getBoundingClientRect();
         const width = Math.round(dimensions.width);
         const height = Math.round(dimensions.height);
@@ -96,7 +111,8 @@ export class CanvasBlockOverlay implements OverlayRenderer {
 
         // already dark frames never cross the gate: the overlay stays hidden
         // and the pristine video shows through
-        const lit = gate.update(measureLightness(frame) >= options.gateRatio, video.paused);
+        const lit =
+            timelineLit ?? gate.update(measureLightness(frame) >= options.gateRatio, video.paused);
         if (!lit) {
             style.visibility = 'hidden';
             return;
@@ -126,6 +142,11 @@ export class DarkviewEngine {
     private rebindTimerIdentifier: number | undefined;
     private renderFailures = 0;
     private settings: DarkviewSettings = { ...DEFAULT_SETTINGS };
+    private timeline: GateSource | undefined;
+    private readonly timelineFactory:
+        | ((videoId: string) => Promise<GateSource | undefined>)
+        | undefined;
+    private timelineVideoId: string | undefined;
     private timerIdentifier: number | undefined;
     private video: HTMLVideoElement | undefined;
 
@@ -133,6 +154,7 @@ export class DarkviewEngine {
         this.document = options.document ?? document;
         this.overlayFactory =
             options.overlayFactory ?? ((target: Document) => new CanvasBlockOverlay(target));
+        this.timelineFactory = options.timelineFactory;
     }
 
     public getStatus(): DarkviewStatus {
@@ -191,6 +213,7 @@ export class DarkviewEngine {
         }
 
         // the overlay reads the new options on the next frame; repaint paused frames now
+        this.ensureTimeline();
         this.renderOnce();
         return this.getStatus();
     }
@@ -314,9 +337,43 @@ export class DarkviewEngine {
         }
 
         this.gate.reset();
+        this.ensureTimeline();
         this.effect = 'applied';
         this.renderOnce();
         this.scheduleNextRender();
+    }
+
+    private ensureTimeline(): void {
+        const factory = this.timelineFactory;
+        const href = this.document.defaultView?.location.href;
+        if (!factory || !href) {
+            return;
+        }
+
+        // pre-analysis is the user's choice; off means the live gate decides alone
+        const videoId = this.settings.preanalysis ? videoIdFromUrl(href) : undefined;
+        if (!videoId) {
+            this.timeline = undefined;
+            this.timelineVideoId = undefined;
+            return;
+        }
+        if (videoId === this.timelineVideoId) {
+            return;
+        }
+
+        this.timelineVideoId = videoId;
+        this.timeline = undefined;
+        const generation = this.generation;
+        void factory(videoId)
+            .then((timeline) => {
+                if (generation !== this.generation || this.timelineVideoId !== videoId) {
+                    return;
+                }
+                this.timeline = timeline;
+                // repaint the current (possibly paused) frame with the new knowledge
+                this.renderOnce();
+            })
+            .catch(() => undefined);
     }
 
     private attachOverlay(video: HTMLVideoElement): boolean {
@@ -344,6 +401,7 @@ export class DarkviewEngine {
             blockSize: BLOCK_SIZE,
             intensity: this.settings.intensity,
             ...SENSITIVITY_PROFILES[this.settings.sensitivity],
+            ...(this.timeline ? { timeline: this.timeline } : {}),
         };
     }
 

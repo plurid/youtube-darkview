@@ -103,8 +103,10 @@ translates these into status lines.
 
 Schema v2 in `chrome.storage.local` under `youtubeDarkviewOptions`:
 `{ version: 2, mode: 'adaptive' | 'always', sensitivity: 'low' | 'balanced' | 'high',
-intensity: 0.65–1 }`. `normalizeSettings` accepts anything (unknown → defaults) and
-migrates the legacy v1 shape (`type`/`threshold`). Settings are global; **activation is
+intensity: 0.65–1, preanalysis: boolean }`. `preanalysis` (default true) controls whether
+content-aware mode builds a storyboard timeline on activation or relies on the live gate
+alone. `normalizeSettings` accepts anything (unknown → defaults), fills missing additive
+fields, and migrates the legacy v1 shape (`type`/`threshold`). Settings are global; **activation is
 per page** — Alt/Option+D or the popup toggle acts on one tab only and does not persist.
 
 ## Testability seams

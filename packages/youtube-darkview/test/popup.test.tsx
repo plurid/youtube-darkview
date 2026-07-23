@@ -123,13 +123,21 @@ describe('Popup', () => {
         render(<Popup />);
         await screen.findByText(/ready on this page/);
 
+        await user.click(screen.getByRole('button', { name: 'pre-analysis' }));
+        await waitFor(() =>
+            expect(api.set).toHaveBeenLastCalledWith({
+                [SETTINGS_STORAGE_KEY]: { ...DEFAULT_SETTINGS, preanalysis: false },
+            }),
+        );
+
         await user.click(screen.getByRole('button', { name: 'invert' }));
         await waitFor(() =>
             expect(api.set).toHaveBeenLastCalledWith({
-                [SETTINGS_STORAGE_KEY]: { ...DEFAULT_SETTINGS, mode: 'always' },
+                [SETTINGS_STORAGE_KEY]: { ...DEFAULT_SETTINGS, mode: 'always', preanalysis: false },
             }),
         );
         expect(screen.queryByRole('slider', { name: 'sensitivity' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'pre-analysis' })).not.toBeInTheDocument();
 
         await user.click(screen.getByRole('button', { name: 'content-aware' }));
         fireEvent.change(screen.getByRole('slider', { name: 'sensitivity' }), {

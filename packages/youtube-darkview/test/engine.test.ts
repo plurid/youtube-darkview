@@ -274,6 +274,77 @@ describe('DarkviewEngine', () => {
         engine.stop();
     });
 
+    it('builds a timeline for the current watch video and hands it to the overlay', async () => {
+        window.history.pushState({}, '', '/watch?v=abcdefghijk');
+        const video = addVideo();
+        const overlay = fakeOverlay();
+        const timeline = { litAt: jest.fn(() => true) };
+        const timelineFactory = jest.fn(async (_videoId: string) => timeline);
+        const engine = new DarkviewEngine({
+            document,
+            overlayFactory: () => overlay,
+            timelineFactory,
+        });
+
+        engine.start();
+        expect(timelineFactory).toHaveBeenCalledWith('abcdefghijk');
+        expect(overlay.render.mock.lastCall?.[1]).not.toHaveProperty('timeline');
+
+        await Promise.resolve();
+        await Promise.resolve();
+        const lastOptions = overlay.render.mock.lastCall?.[1] as { timeline?: unknown } | undefined;
+        expect(lastOptions?.timeline).toBe(timeline);
+
+        video.dispatchEvent(new Event('loadeddata'));
+        expect(timelineFactory).toHaveBeenCalledTimes(1);
+
+        engine.stop();
+        window.history.pushState({}, '', '/');
+    });
+
+    it('drops and rebuilds the timeline when the pre-analysis toggle changes', async () => {
+        window.history.pushState({}, '', '/watch?v=abcdefghijk');
+        addVideo();
+        const overlay = fakeOverlay();
+        const timeline = { litAt: jest.fn(() => true) };
+        const timelineFactory = jest.fn(async (_videoId: string) => timeline);
+        const engine = new DarkviewEngine({
+            document,
+            overlayFactory: () => overlay,
+            timelineFactory,
+        });
+
+        engine.start();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(timelineFactory).toHaveBeenCalledTimes(1);
+
+        engine.updateSettings({ ...DEFAULT_SETTINGS, preanalysis: false });
+        expect(overlay.render.mock.lastCall?.[1]).not.toHaveProperty('timeline');
+        expect(timelineFactory).toHaveBeenCalledTimes(1);
+
+        engine.updateSettings({ ...DEFAULT_SETTINGS, preanalysis: true });
+        expect(timelineFactory).toHaveBeenCalledTimes(2);
+
+        engine.stop();
+        window.history.pushState({}, '', '/');
+    });
+
+    it('skips the timeline lookup away from video pages', () => {
+        addVideo();
+        const overlay = fakeOverlay();
+        const timelineFactory = jest.fn(async () => undefined);
+        const engine = new DarkviewEngine({
+            document,
+            overlayFactory: () => overlay,
+            timelineFactory,
+        });
+
+        engine.start();
+        expect(timelineFactory).not.toHaveBeenCalled();
+        engine.stop();
+    });
+
     it('paces rendering with requestVideoFrameCallback when the browser provides it', () => {
         const video = addVideo();
         let callback: (() => void) | undefined;
@@ -364,6 +435,48 @@ describe('CanvasBlockOverlay', () => {
 
         overlay.detach();
         expect(canvas.parentElement).toBeNull();
+    });
+
+    it('trusts a pre-analyzed timeline before the live gate', () => {
+        let pixels = [10, 10, 10, 255];
+        const drawImage = jest.fn();
+        const getImageData = jest.fn(() => ({
+            data: new Uint8ClampedArray(pixels),
+            width: 1,
+            height: 1,
+        }));
+        const putImageData = jest.fn();
+        const canvas = document.createElement('canvas');
+        canvas.getContext = jest.fn(() => ({ drawImage, getImageData, putImageData })) as never;
+        const createElement = jest.spyOn(document, 'createElement').mockReturnValueOnce(canvas);
+        const overlay = new CanvasBlockOverlay(document);
+        createElement.mockRestore();
+
+        const container = document.createElement('div');
+        const video = document.createElement('video');
+        container.append(video);
+        document.body.append(container);
+        video.getBoundingClientRect = () =>
+            ({ bottom: 90, height: 90, left: 0, right: 160, top: 0, width: 160 }) as DOMRect;
+
+        const gate = new FrameGate();
+        const base = { blockFraction: 0.5, blockSize: 20, gateRatio: 0.35, intensity: 1 };
+
+        // an unlit answer skips every drawing cost
+        overlay.render(video, { ...base, timeline: { litAt: () => false } }, gate);
+        expect(drawImage).not.toHaveBeenCalled();
+        expect(canvas.style.visibility).toBe('hidden');
+
+        // a lit answer overrides what the live gate would say about a dark frame
+        overlay.render(video, { ...base, timeline: { litAt: () => true } }, gate);
+        expect(putImageData).toHaveBeenCalledTimes(1);
+        expect(canvas.style.visibility).toBe('visible');
+
+        // no answer falls back to the live gate
+        pixels = [255, 255, 255, 255];
+        overlay.render(video, { ...base, timeline: { litAt: () => undefined } }, gate);
+        expect(canvas.style.visibility).toBe('visible');
+        expect(putImageData).toHaveBeenCalledTimes(2);
     });
 
     it('rejects videos without a parent or readable dimensions', () => {

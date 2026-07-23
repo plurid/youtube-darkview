@@ -188,23 +188,34 @@ const Popup = () => {
             </ModeControl>
 
             {settings.mode === 'adaptive' && (
-                <SettingRow>
-                    <SettingLabel>
-                        <span>sensitivity</span>
-                        <span>{settings.sensitivity}</span>
-                    </SettingLabel>
-                    <Slider
-                        name="sensitivity"
-                        value={SENSITIVITIES.indexOf(settings.sensitivity)}
-                        atChange={setSensitivity}
-                        min={0}
-                        max={2}
-                        step={1}
-                        width={150}
+                <>
+                    <SettingRow>
+                        <SettingLabel>
+                            <span>sensitivity</span>
+                            <span>{settings.sensitivity}</span>
+                        </SettingLabel>
+                        <Slider
+                            name="sensitivity"
+                            value={SENSITIVITIES.indexOf(settings.sensitivity)}
+                            atChange={setSensitivity}
+                            min={0}
+                            max={2}
+                            step={1}
+                            width={150}
+                            theme={dewiki}
+                            level={2}
+                        />
+                    </SettingRow>
+
+                    <InputSwitch
+                        name="pre-analysis"
+                        checked={settings.preanalysis}
+                        atChange={() => void updateSettings({ preanalysis: !settings.preanalysis })}
                         theme={dewiki}
-                        level={2}
+                        compact={true}
+                        style={inputStyle}
                     />
-                </SettingRow>
+                </>
             )}
 
             <SettingRow>

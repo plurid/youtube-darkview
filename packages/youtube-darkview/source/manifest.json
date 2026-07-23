@@ -3,7 +3,7 @@
     "name": "YouTube Darkview",
     "short_name": "YouTube Darkview",
     "description": "content-aware dark viewing for YouTube videos",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "author": "plurid",
     "minimum_chrome_version": "120",
 

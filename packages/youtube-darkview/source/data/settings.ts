@@ -8,6 +8,7 @@ export interface DarkviewSettings {
     mode: DarkviewMode;
     sensitivity: DarkviewSensitivity;
     intensity: number;
+    preanalysis: boolean;
 }
 
 export const DEFAULT_SETTINGS: Readonly<DarkviewSettings> = Object.freeze({
@@ -15,6 +16,7 @@ export const DEFAULT_SETTINGS: Readonly<DarkviewSettings> = Object.freeze({
     mode: 'adaptive',
     sensitivity: 'balanced',
     intensity: 0.9,
+    preanalysis: true,
 });
 
 type StorageReader = Pick<chrome.storage.StorageArea, 'get'>;
@@ -63,6 +65,10 @@ export const normalizeSettings = (value: unknown): DarkviewSettings => {
                 ? value.sensitivity
                 : DEFAULT_SETTINGS.sensitivity,
             intensity: clampIntensity(value.intensity),
+            preanalysis:
+                typeof value.preanalysis === 'boolean'
+                    ? value.preanalysis
+                    : DEFAULT_SETTINGS.preanalysis,
         };
     }
 
@@ -72,6 +78,7 @@ export const normalizeSettings = (value: unknown): DarkviewSettings => {
             mode: value.type === 'content-aware' ? 'adaptive' : 'always',
             sensitivity: migrateThreshold(value.threshold),
             intensity: DEFAULT_SETTINGS.intensity,
+            preanalysis: DEFAULT_SETTINGS.preanalysis,
         };
     }
 

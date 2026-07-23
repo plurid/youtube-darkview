@@ -23,7 +23,13 @@ describe('settings', () => {
                 sensitivity: 'high',
                 intensity: 5,
             }),
-        ).toEqual({ version: 2, mode: 'always', sensitivity: 'high', intensity: 1 });
+        ).toEqual({
+            version: 2,
+            mode: 'always',
+            sensitivity: 'high',
+            intensity: 1,
+            preanalysis: true,
+        });
 
         expect(
             normalizeSettings({
@@ -50,6 +56,16 @@ describe('settings', () => {
             mode,
             sensitivity,
             intensity: DEFAULT_SETTINGS.intensity,
+            preanalysis: true,
+        });
+    });
+
+    it('respects an explicit pre-analysis choice and defaults anything else', () => {
+        expect(normalizeSettings({ ...DEFAULT_SETTINGS, preanalysis: false })).toMatchObject({
+            preanalysis: false,
+        });
+        expect(normalizeSettings({ ...DEFAULT_SETTINGS, preanalysis: 'nope' })).toMatchObject({
+            preanalysis: true,
         });
     });
 

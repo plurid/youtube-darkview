@@ -58,6 +58,10 @@ An array of `{ start, end, ratio }`, all in seconds:
 - Constraints (readers MUST validate): `0 ≤ start < end ≤ duration + 15`; segments sorted
   by `start`, non-overlapping; `ratio ∈ [0, 1]`. Gaps are legal and mean "no coverage" —
   consumers fall back to live gating there.
+- Consumers MAY derive temporal stability from adjacent segment ratios (long spans of
+  near-constant dim ratios indicate static dark-dominant slides); the extension's
+  in-memory timeline precomputes such a flag at read time. The wire format stays plain
+  ratios.
 
 ## `calibration` (optional)
 

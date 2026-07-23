@@ -2,12 +2,12 @@ import { reportError } from '~common/utilities';
 import { type DarkviewResponse, isDarkviewRequest, loadSettings, settingsFromChanges } from '~data';
 
 import { DarkviewEngine } from './engine';
+import { cachedTimelineFactory } from './mapcache';
 import { isDarkviewShortcut, isEditableTarget } from './shortcut';
-import { fetchGateTimeline } from './storyboard';
 
 const main = async (): Promise<void> => {
     const engine = new DarkviewEngine({
-        timelineFactory: (videoId) => fetchGateTimeline(videoId),
+        timelineFactory: (videoId) => cachedTimelineFactory(videoId),
     });
     engine.updateSettings(
         await loadSettings().catch((error: unknown) => {

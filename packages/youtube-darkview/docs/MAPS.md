@@ -83,8 +83,14 @@ Pre-analysis is user-controllable: a `preanalysis` setting (default on, toggle i
 popup's content-aware section) disables the storyboard step entirely, leaving the live
 gate as the sole decision source.
 
-Non-goals for Stage 1: no persistence (maps are in-memory per page), no uploads, no new
-permissions.
+Analyses are cached locally (`contentscript/mapcache.ts`): the **raw samples** — not built
+segments — are stored in `chrome.storage.local` per video id (40-entry LRU, 8-hour expiry),
+so re-activation and revisits are instant, and any future tuning of thresholds or the
+stability rule applies retroactively to every cached analysis at read time. Caching is
+best effort: a failed read or write always falls back to a fresh fetch. This local cache
+is also the natural seed for a future shared map service.
+
+Non-goals for Stage 1: no uploads, no new permissions.
 
 ## Stage 2 — community map service (direction only, not committed)
 

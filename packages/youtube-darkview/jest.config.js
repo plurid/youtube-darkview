@@ -14,6 +14,7 @@ module.exports = {
     collectCoverageFrom: [
         'source/contentscript/blocks.ts',
         'source/contentscript/engine.ts',
+        'source/contentscript/mapcache.ts',
         'source/contentscript/shortcut.ts',
         'source/contentscript/storyboard.ts',
         'source/contentscript/timeline.ts',

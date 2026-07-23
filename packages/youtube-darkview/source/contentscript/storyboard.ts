@@ -194,10 +194,16 @@ const browserIO: StoryboardIO = {
     },
 };
 
-export const fetchGateTimeline = async (
+export interface StoryboardAnalysis {
+    samples: TimelineSample[];
+    frameDuration: number;
+    duration: number;
+}
+
+export const fetchStoryboardAnalysis = async (
     videoId: string,
     io: StoryboardIO = browserIO,
-): Promise<GateTimeline | undefined> => {
+): Promise<StoryboardAnalysis | undefined> => {
     try {
         const html = await io.fetchText(
             `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`,
@@ -232,8 +238,21 @@ export const fetchGateTimeline = async (
         if (samples.length === 0) {
             return undefined;
         }
-        return new GateTimeline(buildSegments(samples, level.intervalSeconds, extracted.duration));
+        return { samples, frameDuration: level.intervalSeconds, duration: extracted.duration };
     } catch {
         return undefined;
     }
+};
+
+export const fetchGateTimeline = async (
+    videoId: string,
+    io: StoryboardIO = browserIO,
+): Promise<GateTimeline | undefined> => {
+    const analysis = await fetchStoryboardAnalysis(videoId, io);
+    if (!analysis) {
+        return undefined;
+    }
+    return new GateTimeline(
+        buildSegments(analysis.samples, analysis.frameDuration, analysis.duration),
+    );
 };

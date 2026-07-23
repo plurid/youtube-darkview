@@ -17,9 +17,10 @@ leaves the browser.**
 Stage 1 adds fetches of the YouTube watch page and `i.ytimg.com` storyboard sprites — both
 requests to YouTube's own infrastructure, made from the user's browser in the context of a
 video the user is actively watching, indistinguishable in kind from what the player itself
-does when scrubbing. No third party is contacted; nothing is transmitted outward; computed
-maps live in memory for the lifetime of the page. The extension's permission surface does
-not change.
+does when scrubbing. No third party is contacted; nothing is transmitted outward. Computed
+analyses are cached in `chrome.storage.local` (derived numbers about public video content,
+capped at 40 entries, expiring after 8 hours) — local to the browser profile like every
+other extension setting. The extension's permission surface does not change.
 
 Summary: after Stage 1 the privacy statement above remains true, word for word.
 

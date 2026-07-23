@@ -50,7 +50,7 @@ const getStatusText = (status: DarkviewStatus | undefined, mode: DarkviewMode): 
     switch (status.effect) {
         case 'applied':
             return mode === 'adaptive'
-                ? 'content-aware darkview active: only light regions are inverted'
+                ? 'content-aware darkview active\nonly light regions are inverted'
                 : 'the whole video is inverted';
         case 'fallback':
             return 'content-aware rendering unavailable: inverting the whole video';

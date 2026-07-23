@@ -89,10 +89,14 @@ export const SettingLabel = styled.div`
 `;
 
 export const StatusText = styled.p<{ $error?: boolean }>`
-    min-height: 18px;
+    /* always reserve two lines so the controls below never shift when the
+       status changes between one- and two-line texts */
+    min-height: 36px;
     max-width: 250px;
     color: ${({ $error }) => ($error ? '#ffd2d2' : '#ffffff')};
     font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-line;
 `;
 
 export const inputStyle = {
